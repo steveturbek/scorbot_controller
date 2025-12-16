@@ -100,8 +100,7 @@ The goals of the project are to
 - - 15V, 4A, unregulated, supplies power to the robot motors.
 - –15V, 4A, unregulated, supplies power to the robot motors.
 - - 5V, 1.5A, regulated, supplies power to the microprocessor, the memory and the logic in the control circuit.
-- - 12V, 0.4A, regulated, supplies power to the I/O circuitry outputs, and to
-    the RS232 communications.
+- - 12V, 0.4A, regulated, supplies power to the I/O circuitry outputs, and to the RS232 communications.
 - –12V, 0.4A, regulated, supplies power to the RS232 communications.
 
 ### Motors
@@ -124,116 +123,113 @@ Here is the pin numbers (looking at the male scorbot cable connector pins)
     ─────────────────────────────────────────────────────────────────────────────────────
 </pre>
 
-| PIN # | MOTOR | Arm Joint   | PURPOSE                      | Note                      |
-| ----- | ----- | ----------- | ---------------------------- | ------------------------- |
-| 1     | 2     | Shoulder    | Encoder Photoresistor 0 (P0) |                           |
-| 2     | 1     | Base        | Encoder Photoresistor 0 (P0) |                           |
-| 3     | 5     | Wrist Roll  | Encoder Photoresistor 1 (P1) |                           |
-| 4     | 3     | Elbow       | Encoder Photoresistor 1 (P1) |                           |
-| 5     | 1     | Base        | Encoder Photoresistor 1 (P1) |                           |
-| 6     | 5     | Wrist Roll  | Microswitch                  |                           |
-| 7     | 2     | Shoulder    | Microswitch                  |                           |
-| 8     | 4     | Wrist Pitch | Microswitch                  |                           |
-| 9     | 5     | Wrist Roll  | Encoder LED                  |                           |
-| 10    | 3     | Elbow       | Encoder LED                  |                           |
-| 11    | 1     | Base        | Encoder LED                  |                           |
-| 12    | 6     | Gripper     | Motor +                      |                           |
-| 13    | 5     | Wrist Roll  | Motor +                      |                           |
-| 14    | 4     | Wrist Pitch | Motor +                      |                           |
-| 15    | 3     | Elbow       | Motor +                      |                           |
-| 16    | 2     | Shoulder    | Motor +                      |                           |
-| 17    | 1     | Base        | Motor +                      |                           |
-| 18    | 5     | Wrist Roll  | Encoder Photoresistor 0 (P0) |                           |
-| 19    | 6     | Gripper     | Encoder Photoresistor 1 (P1) |                           |
-| 20    | 4     | Wrist Pitch | Encoder Photoresistor 1 (P1) |                           |
-| 21    | 2     | Shoulder    | Encoder Photoresistor 1 (P1) |                           |
-| 22    | 6     | Gripper     | Microswitch                  | manual says not connected |
-| 23    | 1     | Base        | Microswitch                  |                           |
-| 24    | 3     | Elbow       | Microswitch                  |                           |
-| 25    | 6     | Gripper     | Encoder LED                  |                           |
-| 26    | 4     | Wrist Pitch | Encoder LED                  |                           |
-| 27    | 2     | Shoulder    | Encoder LED                  |                           |
-| 28    | 6     | Gripper     | Encoder GND                  | is connected              |
-| 29    | 5     | Wrist Roll  | Microswitch & encoder GND    |                           |
-| 30    | 4     | Wrist Pitch | Microswitch & encoder GND    |                           |
-| 31    | 3     | Elbow       | Microswitch & encoder GND    |                           |
-| 32    | 2     | Shoulder    | Microswitch & encoder GND    |                           |
-| 33    | 1     | Base        | Microswitch & encoder GND    |                           |
-| 34    | 6     | Gripper     | Encoder Photoresistor 0 (P0) |                           |
-| 35    | 4     | Wrist Pitch | Encoder Photoresistor 0 (P0) |                           |
-| 36    | 3     | Elbow       | Encoder Photoresistor 0 (P0) |                           |
-| 37    |       |             |                              |                           |
-| 38    |       |             |                              |                           |
-| 39    |       |             |                              |                           |
-| 40    |       |             |                              |                           |
-| 41    |       |             |                              |                           |
-| 42    |       |             |                              |                           |
-| 43    |       |             |                              |                           |
-| 44    |       |             |                              |                           |
-| 45    | 6     | Gripper     | Motor -                      |                           |
-| 46    | 5     | Wrist Roll  | Motor -                      |                           |
-| 47    | 4     | Wrist Pitch | Motor -                      |                           |
-| 48    | 3     | Elbow       | Motor -                      |                           |
-| 49    | 2     | Shoulder    | Motor -                      |                           |
-| 50    | 1     | Base        | Motor -                      |                           |
+## SCORBOT ER III WIRING GUIDE
 
-## ARDUINO MEGA PIN ASSIGNMENTS - SCORBOT ER III
+### TABLE 1: DB-50 CONNECTOR TO ARDUINO MEGA
 
-### MOTOR CONTROL (18 pins)
+| DB-50 Pin | Motor | Joint       | Signal               | Arduino Pin        | Notes                     |
+| --------- | ----- | ----------- | -------------------- | ------------------ | ------------------------- |
+| 1         | 2     | Shoulder    | Encoder P0           | 34                 |                           |
+| 2         | 1     | Base        | Encoder P0           | 20                 | INT3                      |
+| 3         | 5     | Wrist Roll  | Encoder P1           | 41                 |                           |
+| 4         | 3     | Elbow       | Encoder P1           | 37                 |                           |
+| 5         | 1     | Base        | Encoder P1           | 21                 | INT2                      |
+| 6         | 5     | Wrist Roll  | Microswitch          | 48                 |                           |
+| 7         | 2     | Shoulder    | Microswitch          | 45                 |                           |
+| 8         | 4     | Wrist Pitch | Microswitch          | 47                 |                           |
+| 9         | 5     | Wrist Roll  | Encoder LED          | 5V via 47Ω         |                           |
+| 10        | 3     | Elbow       | Encoder LED          | 5V via 47Ω         |                           |
+| 11        | 1     | Base        | Encoder LED          | 5V via 47Ω         |                           |
+| 12        | 6     | Gripper     | Motor +              | L298N Board 3 OUT3 |                           |
+| 13        | 5     | Wrist Roll  | Motor +              | L298N Board 3 OUT1 |                           |
+| 14        | 4     | Wrist Pitch | Motor +              | L298N Board 2 OUT3 |                           |
+| 15        | 3     | Elbow       | Motor +              | L298N Board 2 OUT1 |                           |
+| 16        | 2     | Shoulder    | Motor +              | L298N Board 1 OUT3 |                           |
+| 17        | 1     | Base        | Motor +              | L298N Board 1 OUT1 |                           |
+| 18        | 5     | Wrist Roll  | Encoder P0           | 40                 |                           |
+| 19        | 6     | Gripper     | Encoder P1           | 43                 |                           |
+| 20        | 4     | Wrist Pitch | Encoder P1           | 39                 |                           |
+| 21        | 2     | Shoulder    | Encoder P1           | 35                 |                           |
+| 22        | 6     | Gripper     | Microswitch          | 49                 | manual says not connected |
+| 23        | 1     | Base        | Microswitch          | 44                 |                           |
+| 24        | 3     | Elbow       | Microswitch          | 46                 |                           |
+| 25        | 6     | Gripper     | Encoder LED          | 5V via 47Ω         |                           |
+| 26        | 4     | Wrist Pitch | Encoder LED          | 5V via 47Ω         |                           |
+| 27        | 2     | Shoulder    | Encoder LED          | 5V via 47Ω         |                           |
+| 28        | 6     | Gripper     | Encoder GND          | GND                |                           |
+| 29        | 5     | Wrist Roll  | Switch & Encoder GND | GND                |                           |
+| 30        | 4     | Wrist Pitch | Switch & Encoder GND | GND                |                           |
+| 31        | 3     | Elbow       | Switch & Encoder GND | GND                |                           |
+| 32        | 2     | Shoulder    | Switch & Encoder GND | GND                |                           |
+| 33        | 1     | Base        | Switch & Encoder GND | GND                |                           |
+| 34        | 6     | Gripper     | Encoder P0           | 42                 |                           |
+| 35        | 4     | Wrist Pitch | Encoder P0           | 38                 |                           |
+| 36        | 3     | Elbow       | Encoder P0           | 36                 |                           |
+| 37-44     | -     | -           | Not connected        | -                  |                           |
+| 45        | 6     | Gripper     | Motor -              | L298N Board 3 OUT4 |                           |
+| 46        | 5     | Wrist Roll  | Motor -              | L298N Board 3 OUT2 |                           |
+| 47        | 4     | Wrist Pitch | Motor -              | L298N Board 2 OUT4 |                           |
+| 48        | 3     | Elbow       | Motor -              | L298N Board 2 OUT2 |                           |
+| 49        | 2     | Shoulder    | Motor -              | L298N Board 1 OUT4 |                           |
+| 50        | 1     | Base        | Motor -              | L298N Board 1 OUT2 |                           |
 
-| Motor | Joint       | IN1 | IN2 | IN3 | IN4 | ENA (PWM) | ENB (PWM) | L298N Board |
-| ----- | ----------- | --- | --- | --- | --- | --------- | --------- | ----------- |
-| 1     | Base        | 22  | 23  | -   | -   | 2         | -         | Board 1     |
-| 2     | Shoulder    | -   | -   | 24  | 25  | -         | 3         | Board 1     |
-| 3     | Elbow       | 26  | 27  | -   | -   | 4         | -         | Board 2     |
-| 4     | Wrist Pitch | -   | -   | 28  | 29  | -         | 5         | Board 2     |
-| 5     | Wrist Roll  | 30  | 31  | -   | -   | 6         | -         | Board 3     |
-| 6     | Gripper     | -   | -   | 32  | 33  | -         | 7         | Board 3     |
+### TABLE 2: ARDUINO MEGA TO L298N MOTOR DRIVERS
 
-### ENCODERS (12 pins)
+| Arduino Pin | Signal    | L298N Board | L298N Pin | Motor | Joint       |
+| ----------- | --------- | ----------- | --------- | ----- | ----------- |
+| 22          | Direction | Board 1     | IN1       | 1     | Base        |
+| 23          | Direction | Board 1     | IN2       | 1     | Base        |
+| 2           | PWM Speed | Board 1     | ENA       | 1     | Base        |
+| 24          | Direction | Board 1     | IN3       | 2     | Shoulder    |
+| 25          | Direction | Board 1     | IN4       | 2     | Shoulder    |
+| 3           | PWM Speed | Board 1     | ENB       | 2     | Shoulder    |
+| 26          | Direction | Board 2     | IN1       | 3     | Elbow       |
+| 27          | Direction | Board 2     | IN2       | 3     | Elbow       |
+| 4           | PWM Speed | Board 2     | ENA       | 3     | Elbow       |
+| 28          | Direction | Board 2     | IN3       | 4     | Wrist Pitch |
+| 29          | Direction | Board 2     | IN4       | 4     | Wrist Pitch |
+| 5           | PWM Speed | Board 2     | ENB       | 4     | Wrist Pitch |
+| 30          | Direction | Board 3     | IN1       | 5     | Wrist Roll  |
+| 31          | Direction | Board 3     | IN2       | 5     | Wrist Roll  |
+| 6           | PWM Speed | Board 3     | ENA       | 5     | Wrist Roll  |
+| 32          | Direction | Board 3     | IN3       | 6     | Gripper     |
+| 33          | Direction | Board 3     | IN4       | 6     | Gripper     |
+| 7           | PWM Speed | Board 3     | ENB       | 6     | Gripper     |
 
-| Motor | Joint       | P0 Pin | P1 Pin | Notes      |
-| ----- | ----------- | ------ | ------ | ---------- |
-| 1     | Base        | 20     | 21     | INT3, INT2 |
-| 2     | Shoulder    | 34     | 35     |            |
-| 3     | Elbow       | 36     | 37     |            |
-| 4     | Wrist Pitch | 38     | 39     |            |
-| 5     | Wrist Roll  | 40     | 41     |            |
-| 6     | Gripper     | 42     | 43     |            |
+### TABLE 3: L298N MOTOR OUTPUTS TO DB-50
 
-### MICROSWITCHES (6 pins)
+| L298N Board | Output | DB-50 Pin | Motor | Joint               |
+| ----------- | ------ | --------- | ----- | ------------------- |
+| Board 1     | OUT1   | 17        | 1     | Base Motor +        |
+| Board 1     | OUT2   | 50        | 1     | Base Motor -        |
+| Board 1     | OUT3   | 16        | 2     | Shoulder Motor +    |
+| Board 1     | OUT4   | 49        | 2     | Shoulder Motor -    |
+| Board 2     | OUT1   | 15        | 3     | Elbow Motor +       |
+| Board 2     | OUT2   | 48        | 3     | Elbow Motor -       |
+| Board 2     | OUT3   | 14        | 4     | Wrist Pitch Motor + |
+| Board 2     | OUT4   | 47        | 4     | Wrist Pitch Motor - |
+| Board 3     | OUT1   | 13        | 5     | Wrist Roll Motor +  |
+| Board 3     | OUT2   | 46        | 5     | Wrist Roll Motor -  |
+| Board 3     | OUT3   | 12        | 6     | Gripper Motor +     |
+| Board 3     | OUT4   | 45        | 6     | Gripper Motor -     |
 
-| Switch | Joint       | Pin |
-| ------ | ----------- | --- |
-| 1      | Base        | 44  |
-| 2      | Shoulder    | 45  |
-| 3      | Elbow       | 46  |
-| 4      | Wrist Pitch | 47  |
-| 5      | Wrist Roll  | 48  |
-| 6      | Gripper     | 49  |
+### TABLE 4: POWER CONNECTIONS
 
-### SERIAL COMMUNICATION (2 pins)
+| Component         | Connection | Source                         | Notes                      |
+| ----------------- | ---------- | ------------------------------ | -------------------------- |
+| Arduino Mega      | 12V Vin    | Common 12v plug or Barrel Jack | Powers logic               |
+| Arduino Mega      | GND        | Common Ground                  | Shared with all components |
+| L298N Board 1-3   | 12V        | 12V 10A Power Supply           | Motor power                |
+| L298N Board 1-3   | GND        | Common Ground                  | Shared ground              |
+| Encoder LEDs (6x) | 5V         | Arduino 5V via 47Ω resistor    | One resistor per encoder   |
+| Encoder LEDs GND  | GND        | DB-50 pins 28-33               | Common ground              |
 
-| Function | Pin | Notes                           |
-| -------- | --- | ------------------------------- |
-| TX       | 18  | Serial1 for joystick controller |
-| RX       | 19  | Serial1 for joystick controller |
+### SERIAL COMMUNICATION
 
-### POWER CONNECTIONS
-
-| Connection | Notes                                              |
-| ---------- | -------------------------------------------------- |
-| GND        | All GND pins connected to common ground            |
-| 5V         | Encoder LEDs (via 47Ω resistors per manual)        |
-| 12V        | L298N boards and motors (from external 10A supply) |
-
-![Arduino Mega](images/arduino-mega.svg)
-
-![DB50 Breakout board](images/DB50_breakout_board.svg)
-
-![DC motor](images/dc_motor.svg)
-
-![L298N motor controller](images/l298n-motor-driver-controller-board.svg)
+| Function | Arduino Pin | Purpose                                    |
+| -------- | ----------- | ------------------------------------------ |
+| TX       | 18          | Serial1 - transmit to joystick controller  |
+| RX       | 19          | Serial1 - receive from joystick controller |
 
 ### WIRING TIPS
 
@@ -247,6 +243,16 @@ Here is the pin numbers (looking at the male scorbot cable connector pins)
 3. **Use a breakout board** for the DB-50 connector
 4. **Bundle by function** - keep motor, encoder, and switch wires separated
 5. **Consider a prototype shield** or custom PCB for clean organization
+
+## Diagrams
+
+![Arduino Mega](images/arduino-mega.svg)
+
+![DB50 Breakout board](images/DB50_breakout_board.svg)
+
+![DC motor](images/dc_motor.svg)
+
+![L298N motor controller](images/l298n-motor-driver-controller-board.svg)
 
 ## Spec sheets and Manuals
 
