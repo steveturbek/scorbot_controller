@@ -112,9 +112,9 @@ The goals of the project are to
 
 ### Scorbot Cable connector
 
-The Scorbot cable connector is an unusual [DB 50](https://en.wikipedia.org/wiki/D-subminiature) cable. Connectors and breakout boards that fit are available at Amazon or Ali Express. [DB 50 connector Specification](https://www.farnell.com/datasheets/1656989.pdf)
+The Scorbot cable connector is an unusual [DB 50](https://en.wikipedia.org/wiki/D-subminiature) cable. Connectors and breakout boards that fit are available at Amazon or Ali Express. [DB 50 connector Specification](https://www.farnell.com/datasheets/1656989.pdf) [DB50 diagram](https://upload.wikimedia.org/wikipedia/commons/a/af/DD50_Diagram.svg)
 
-Here is the pin numbers (looking at the scorbot cable connector pins)
+Here is the pin numbers (looking at the male scorbot cable connector pins)
 
 <pre>
 ────────────────────────────────────────────────────────────────────────────────────────────
