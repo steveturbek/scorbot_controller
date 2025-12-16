@@ -177,9 +177,90 @@ Here is the pin numbers (looking at the scorbot cable connector pins)
 | 49    | 2     | Shoulder    | Motor -                      |                           |
 | 50    | 1     | Base        | Motor -                      |                           |
 
-## References
+## ARDUINO MEGA PIN ASSIGNMENTS - SCORBOT ER III
+
+### MOTOR CONTROL (18 pins)
+
+| Motor | Joint       | IN1 | IN2 | IN3 | IN4 | ENA (PWM) | ENB (PWM) | L298N Board |
+| ----- | ----------- | --- | --- | --- | --- | --------- | --------- | ----------- |
+| 1     | Base        | 22  | 23  | -   | -   | 2         | -         | Board 1     |
+| 2     | Shoulder    | -   | -   | 24  | 25  | -         | 3         | Board 1     |
+| 3     | Elbow       | 26  | 27  | -   | -   | 4         | -         | Board 2     |
+| 4     | Wrist Pitch | -   | -   | 28  | 29  | -         | 5         | Board 2     |
+| 5     | Wrist Roll  | 30  | 31  | -   | -   | 6         | -         | Board 3     |
+| 6     | Gripper     | -   | -   | 32  | 33  | -         | 7         | Board 3     |
+
+### ENCODERS (12 pins)
+
+| Motor | Joint       | P0 Pin | P1 Pin | Notes      |
+| ----- | ----------- | ------ | ------ | ---------- |
+| 1     | Base        | 20     | 21     | INT3, INT2 |
+| 2     | Shoulder    | 34     | 35     |            |
+| 3     | Elbow       | 36     | 37     |            |
+| 4     | Wrist Pitch | 38     | 39     |            |
+| 5     | Wrist Roll  | 40     | 41     |            |
+| 6     | Gripper     | 42     | 43     |            |
+
+### MICROSWITCHES (6 pins)
+
+| Switch | Joint       | Pin |
+| ------ | ----------- | --- |
+| 1      | Base        | 44  |
+| 2      | Shoulder    | 45  |
+| 3      | Elbow       | 46  |
+| 4      | Wrist Pitch | 47  |
+| 5      | Wrist Roll  | 48  |
+| 6      | Gripper     | 49  |
+
+### SERIAL COMMUNICATION (2 pins)
+
+| Function | Pin | Notes                           |
+| -------- | --- | ------------------------------- |
+| TX       | 18  | Serial1 for joystick controller |
+| RX       | 19  | Serial1 for joystick controller |
+
+### POWER CONNECTIONS
+
+| Connection | Notes                                              |
+| ---------- | -------------------------------------------------- |
+| GND        | All GND pins connected to common ground            |
+| 5V         | Encoder LEDs (via 47Ω resistors per manual)        |
+| 12V        | L298N boards and motors (from external 10A supply) |
+
+![Arduino Mega](images/arduino-mega.svg)
+
+![DB50 Breakout board](images/DB50_breakout_board.svg)
+
+![DC motor](images/dc_motor.svg)
+
+![L298N motor controller](images/l298n-motor-driver-controller-board.svg)
+
+### WIRING TIPS
+
+1. **Label everything** - use labels/tape on wires at both ends
+2. **Color coding:**
+   - Red: 12V power
+   - Black: GND
+   - Yellow/Green: encoders
+   - Blue: microswitches
+   - Other colors: motor control signals
+3. **Use a breakout board** for the DB-50 connector
+4. **Bundle by function** - keep motor, encoder, and switch wires separated
+5. **Consider a prototype shield** or custom PCB for clean organization
+
+## Spec sheets and Manuals
 
 - [Scorbot ER III Manual](https://www.theoldrobots.com/book45/ER3-Manual.pdf)
+- [Arduino Mega sheet](https://content.arduino.cc/assets/Pinout-Mega2560rev3_latest.pdf)
+- [Arduino Mega details](https://docs.arduino.cc/hardware/mega-2560/)
+- [L298N dual H bridge motor controller](https://www.handsontec.com/dataspecs/L298N%20Motor%20Driver.pdf)
+
+## CAD
+
+- [SCORBOT ER4u Robotic Arm](https://grabcad.com/library/scorbot-er4u-robotic-arm-1)
+- [L298N dual H bridge motor controller](https://grabcad.com/library/motor-driver-l298n-2)
+- [DB50 Connector](https://grabcad.com/library/panel-connector)
+- [Arduino Mega](https://grabcad.com/library/arduino-mega-17)
 
 ## Scorbot GitHub Projects
 
