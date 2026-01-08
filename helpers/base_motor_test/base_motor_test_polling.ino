@@ -1,33 +1,15 @@
 /*
-  SCORBOT Base Motor - HOMING SYSTEM with STALL DETECTION
+  SCORBOT Base Motor - HOMING SYSTEM with STALL DETECTION (POLLING VERSION)
 
-  This implements a complete homing system with:
-  - Encoder-based position tracking
-  - Microswitch home position detection
-  - Stall detection to prevent damage
-  - Software limits after homing
-  - Bidirectional search algorithm
+  This version uses POLLING instead of interrupts for encoder reading,
+  since the encoder pins (34, 35) are not interrupt-capable on Arduino Mega.
 
-  Hardware connections:
-  - Motor Control (L298N Board 1):
-    - Motor DIR1: pin 22 (IN1)
-    - Motor DIR2: pin 23 (IN2)
-    - Motor PWM: pin 2 (ENA)
+  Changes from interrupt version:
+  - No attachInterrupt() calls
+  - updateEncoder() called in main loop instead
+  - Higher loop frequency for accurate encoder tracking
 
-  - Encoder (Base Motor):
-    - Encoder P0: pin 18 (interrupt capable)
-    - Encoder P1: pin 19 (interrupt capable)
-
-  - Home Microswitch:
-    - Base switch: pin 46 (active LOW with internal pullup)
-
-  Serial Commands (9600 baud):
-  - 'h' = Start homing sequence
-  - '+' = Move CW (after homed)
-  - '-' = Move CCW (after homed)
-  - 's' = Stop motor
-  - 'p' = Print current position and status
-  - 'r' = Reset to unhomed state
+  All other functionality identical to base_motor_test.ino
 */
 
 // ============================================================================
@@ -56,8 +38,6 @@
 // SOFTWARE LIMITS (will be calibrated during use)
 // ============================================================================
 
-// Base motor: 310° range, assuming ~1500 counts from center to each limit
-// These are conservative estimates - calibrate after first homing!
 #define MAX_POSITION_CW 1500         // Clockwise limit from home
 #define MAX_POSITION_CCW -1500       // Counter-clockwise limit from home
 #define LIMIT_WARNING_MARGIN 100     // Start slowing this far from limit
@@ -67,13 +47,13 @@
 // ============================================================================
 
 enum HomingState {
-  UNINITIALIZED,    // Power-on state, position unknown
-  HOMING_SEARCH_CCW, // Searching CCW for home switch
-  HOMING_SEARCH_CW,  // Searching CW for home switch (if CCW stalled)
-  HOMING_BACKOFF,    // Back away from switch slightly
-  HOMING_APPROACH,   // Slow final approach for accuracy
-  HOMED,             // Home found, position = 0, ready for operation
-  FAULT              // Error state
+  UNINITIALIZED,
+  HOMING_SEARCH_CCW,
+  HOMING_SEARCH_CW,
+  HOMING_BACKOFF,
+  HOMING_APPROACH,
+  HOMED,
+  FAULT
 };
 
 HomingState currentState = UNINITIALIZED;
@@ -91,9 +71,9 @@ const char* stateNames[] = {
 // GLOBAL VARIABLES
 // ============================================================================
 
-// Encoder tracking
-volatile long encoderCount = 0;
-volatile int lastEncoded = 0;
+// Encoder tracking (NOT volatile since we're polling, not using interrupts)
+long encoderCount = 0;
+int lastEncoded = 0;
 
 // Stall detection
 long lastEncoderCount = 0;
@@ -112,7 +92,7 @@ unsigned long lastSwitchDebounceTime = 0;
 const int SWITCH_DEBOUNCE_MS = 10;
 
 // ============================================================================
-// ENCODER INTERRUPT HANDLERS
+// ENCODER READING (POLLED VERSION)
 // ============================================================================
 
 void updateEncoder() {
@@ -122,7 +102,7 @@ void updateEncoder() {
   int encoded = (MSB << 1) | LSB;
   int sum = (lastEncoded << 2) | encoded;
 
-  // Quadrature decoding: detect direction from state transitions
+  // Quadrature decoding
   if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) {
     encoderCount++;
   }
@@ -163,9 +143,7 @@ void moveMotorCCW(int speed) {
 // ============================================================================
 
 bool isHomeSwitchPressed() {
-  // Active LOW switch with pullup
   if (digitalRead(BASE_SWITCH) == LOW) {
-    // Simple debounce
     if (millis() - lastSwitchDebounceTime > SWITCH_DEBOUNCE_MS) {
       lastSwitchDebounceTime = millis();
       return true;
@@ -175,30 +153,25 @@ bool isHomeSwitchPressed() {
 }
 
 bool checkStall() {
-  // Only check for stall if motor is active
   if (!motorActive) {
     return false;
   }
 
   unsigned long currentTime = millis();
 
-  // Check at regular intervals
   if (currentTime - lastEncoderCheckTime >= STALL_CHECK_INTERVAL_MS) {
     long currentCount = encoderCount;
     long encoderChange = abs(currentCount - lastEncoderCount);
 
-    // If encoder hasn't moved enough, increment stall counter
     if (encoderChange < STALL_MIN_ENCODER_CHANGE) {
       stallCounter++;
 
-      // If stalled for STALL_THRESHOLD_MS, declare stall
       if (stallCounter * STALL_CHECK_INTERVAL_MS >= STALL_THRESHOLD_MS) {
         Serial.println("!!! STALL DETECTED !!!");
         stallCounter = 0;
         return true;
       }
     } else {
-      // Movement detected, reset counter
       stallCounter = 0;
     }
 
@@ -239,7 +212,6 @@ void startHoming() {
 }
 
 void updateHomingStateMachine() {
-  // Check for timeout
   if (millis() - homingStartTime > HOMING_TIMEOUT_MS) {
     Serial.println("\n!!! HOMING TIMEOUT !!!");
     Serial.println("Failed to find home switch within timeout period");
@@ -251,13 +223,11 @@ void updateHomingStateMachine() {
   switch (currentState) {
 
     case HOMING_SEARCH_CCW:
-      // Check if home switch found
       if (isHomeSwitchPressed()) {
         Serial.println("Home switch found! (CCW search)");
         stopMotor();
-        delay(50);  // Let motor stop
+        delay(50);
 
-        // Prepare for backoff
         backoffTargetCount = encoderCount - HOMING_BACKOFF_COUNTS;
         currentState = HOMING_BACKOFF;
         Serial.print("Backing off to count: ");
@@ -266,7 +236,6 @@ void updateHomingStateMachine() {
         return;
       }
 
-      // Check for stall
       if (checkStall()) {
         Serial.println("Stalled in CCW direction, trying CW...");
         stopMotor();
@@ -279,13 +248,11 @@ void updateHomingStateMachine() {
       break;
 
     case HOMING_SEARCH_CW:
-      // Check if home switch found
       if (isHomeSwitchPressed()) {
         Serial.println("Home switch found! (CW search)");
         stopMotor();
         delay(50);
 
-        // Prepare for backoff
         backoffTargetCount = encoderCount + HOMING_BACKOFF_COUNTS;
         currentState = HOMING_BACKOFF;
         Serial.print("Backing off to count: ");
@@ -294,7 +261,6 @@ void updateHomingStateMachine() {
         return;
       }
 
-      // Check for stall
       if (checkStall()) {
         Serial.println("Stalled in CW direction!");
         if (triedCCW) {
@@ -306,7 +272,6 @@ void updateHomingStateMachine() {
           currentState = FAULT;
           stopMotor();
         } else {
-          // Haven't tried CCW yet, try it
           Serial.println("Trying CCW direction...");
           stopMotor();
           delay(100);
@@ -319,7 +284,6 @@ void updateHomingStateMachine() {
       break;
 
     case HOMING_BACKOFF:
-      // Check if we've backed off enough
       if ((backoffTargetCount > encoderCount && encoderCount <= backoffTargetCount) ||
           (backoffTargetCount < encoderCount && encoderCount >= backoffTargetCount)) {
         Serial.println("Backoff complete, beginning slow approach...");
@@ -327,7 +291,6 @@ void updateHomingStateMachine() {
         delay(50);
         currentState = HOMING_APPROACH;
 
-        // Determine approach direction based on where we are
         if (encoderCount < 0) {
           moveMotorCW(HOMING_APPROACH_SPEED);
         } else {
@@ -336,7 +299,6 @@ void updateHomingStateMachine() {
         return;
       }
 
-      // Check for stall during backoff (shouldn't happen, but safety)
       if (checkStall()) {
         Serial.println("!!! Stalled during backoff - FAULT !!!");
         currentState = FAULT;
@@ -346,12 +308,10 @@ void updateHomingStateMachine() {
       break;
 
     case HOMING_APPROACH:
-      // Check if home switch found
       if (isHomeSwitchPressed()) {
         stopMotor();
         delay(50);
 
-        // Set this as home position (zero)
         encoderCount = 0;
         lastEncoderCount = 0;
 
@@ -371,7 +331,6 @@ void updateHomingStateMachine() {
         return;
       }
 
-      // Check for stall during approach
       if (checkStall()) {
         Serial.println("!!! Stalled during final approach - FAULT !!!");
         Serial.println("This shouldn't happen. Check mechanics.");
@@ -382,21 +341,14 @@ void updateHomingStateMachine() {
       break;
 
     case HOMED:
-      // Normal operation - handled in main loop
-      break;
-
     case FAULT:
-      // Stay stopped
-      break;
-
     case UNINITIALIZED:
-      // Waiting for user to start homing
       break;
   }
 }
 
 // ============================================================================
-// MANUAL CONTROL (after homing)
+// MANUAL CONTROL
 // ============================================================================
 
 void moveManualCW() {
@@ -411,8 +363,6 @@ void moveManualCW() {
   }
 
   Serial.println("Moving CW...");
-
-  // Reduce speed if near limit
   int speed = isNearLimit() ? (HOMING_SEARCH_SPEED / 2) : 100;
   moveMotorCW(speed);
 }
@@ -429,8 +379,6 @@ void moveManualCCW() {
   }
 
   Serial.println("Moving CCW...");
-
-  // Reduce speed if near limit
   int speed = isNearLimit() ? (HOMING_SEARCH_SPEED / 2) : 100;
   moveMotorCCW(speed);
 }
@@ -471,32 +419,28 @@ void printStatus() {
 void setup() {
   Serial.begin(9600);
   while (!Serial) {
-    ; // Wait for serial port
+    ;
   }
 
   Serial.println("\n\n");
   Serial.println("========================================");
   Serial.println("SCORBOT BASE MOTOR - HOMING SYSTEM");
   Serial.println("========================================");
-  Serial.println("Firmware version: 1.0");
-  Serial.println("Date: 2026-01-07");
+  Serial.println("Firmware version: 1.0 (POLLING)");
+  Serial.println("Date: 2026-01-08");
   Serial.println();
 
-  // Setup motor pins
   pinMode(BASE_MOTOR_DIR1, OUTPUT);
   pinMode(BASE_MOTOR_DIR2, OUTPUT);
   pinMode(BASE_MOTOR_PWM, OUTPUT);
   stopMotor();
   Serial.println("[OK] Motor pins configured");
 
-  // Setup encoder pins with interrupts
+  // Encoder pins with pullups (NO interrupts - we're polling)
   pinMode(BASE_ENCODER_P0, INPUT_PULLUP);
   pinMode(BASE_ENCODER_P1, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(BASE_ENCODER_P0), updateEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(BASE_ENCODER_P1), updateEncoder, CHANGE);
-  Serial.println("[OK] Encoder configured");
+  Serial.println("[OK] Encoder configured (POLLING mode)");
 
-  // Setup microswitch
   pinMode(BASE_SWITCH, INPUT_PULLUP);
   Serial.println("[OK] Home switch configured");
 
@@ -516,6 +460,9 @@ void setup() {
 // ============================================================================
 
 void loop() {
+  // CRITICAL: Poll encoder every loop for accurate tracking
+  updateEncoder();
+
   // Process serial commands
   if (Serial.available() > 0) {
     char cmd = Serial.read();
@@ -556,7 +503,6 @@ void loop() {
 
       case '\n':
       case '\r':
-        // Ignore newlines
         break;
 
       default:
@@ -575,7 +521,6 @@ void loop() {
 
   // Safety checks during normal operation
   if (currentState == HOMED && motorActive) {
-    // Check software limits
     if (!isInSafeRange()) {
       Serial.println("\n!!! SOFTWARE LIMIT REACHED !!!");
       Serial.print("Position: ");
@@ -583,16 +528,12 @@ void loop() {
       stopMotor();
     }
 
-    // Check for stall
     if (checkStall()) {
       Serial.println("Stall detected during operation!");
       Serial.println("Possible mechanical obstruction. Stopped for safety.");
       stopMotor();
-
-      // Could add auto-recovery here: back off slightly and retry
     }
 
-    // Emergency stop on home switch (shouldn't happen in normal use)
     if (isHomeSwitchPressed() && motorActive) {
       Serial.println("!!! Home switch pressed during operation !!!");
       Serial.println("This is unexpected. Stopping for safety.");
@@ -600,6 +541,7 @@ void loop() {
     }
   }
 
-  // Small delay to prevent overwhelming serial and allow time for stall detection
-  delay(10);
+  // Small delay to keep serial responsive
+  // Note: We can't delay too much or we'll miss encoder pulses
+  delay(1);
 }

@@ -31,7 +31,8 @@ The goals of the project are to
 
 ## TODO
 
-- [] check / set microswitches are in centerpoint of movement
+- [] write arduino code to get arm to move to home position
+- [] check / set cams so microswitches are in centerpoint of movement
 - [x] make replacement microswitch cams
 
 ## Project Log
@@ -40,8 +41,7 @@ The goals of the project are to
 
   - Rough layout of parts on a board - the motors move!
   - modeled and printed controller case. Much easier thinking after just picking a layout. next time would just print base and areas under the ports.
-
--
+  - Wired up mega, DB-50 connector and 3 L298N's. My soldering skills are very limited. I would use screw terminal shield for the Arduino Mega next time.
 
 - December 2025
 
@@ -55,7 +55,7 @@ The goals of the project are to
   - identified it as scorbot ER iii, found documentation and github projects.
   - Motors can be moved with basic 12v .5A power.
   - Gripper does not move, carefully opening it, seems like encoder case is bent, propellor hitting encoder and LEDs
-  - Gripper microswitch is hanging off, which may be related.
+  - Wrist roll microswitch is hanging off, which may be related.
   - I'm going to run motors on 12v power
   - all 5 microswitch work from switch leads and the pins
   - microswitch cam discs that trigger switches at home point are broken for shoulder, elbow, wrist. for shoulder, using broken pieces, looks like trigger radius is 30mm, clearance is 26-28mm. cup depth is 10mm, center hole dia is 6mm
