@@ -15,7 +15,7 @@
 // ============================================================================
 // PIN DEFINITIONS
 // ============================================================================
-#include "../../scorbot.h"
+#include "/Users/steveturbek/Documents/scorbot_controller/scorbot_controller/scorbot.h"
 
 // ============================================================================
 // HOMING PARAMETERS

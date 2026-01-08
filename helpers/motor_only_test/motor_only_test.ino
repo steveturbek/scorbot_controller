@@ -4,10 +4,6 @@
   This will spin the motor without any encoder or stall detection.
   Watch if the motor actually rotates.
 
-  Connections:
-  - Motor CCW (DIR1): pin 22
-  - Motor CW (DIR2): pin 23
-  - Motor PWM: pin 7
 */
 
 // ============================================================================
@@ -19,27 +15,36 @@ void setup() {
   Serial.begin(9600);
 
   // Setup the base motor pins
-  setupMotor(MOTOR_BASE);
+setupAllMotors();
 
-  Serial.println("Motor Only Test - Base Motor");
-  Serial.println("Motor should spin CW for 3 sec, stop, then CCW for 3 sec");
+  Serial.println();
+  Serial.println("--------------------------------");
+  Serial.println("Motor Only Test");
+  Serial.println("Motor should spin CW, stop, then CCW, stop");
   Serial.println();
 }
 
 void loop() {
-  Serial.println("Spinning CW at 25% speed...");
-  moveMotor(MOTOR_BASE, 25, true);  // CW at 25% speed (0-99 range)
-  delay(3000);
+//ScorbotJointIndex_COUNT
+  for (int ScorbotJointNum = 0; ScorbotJointNum < ScorbotJointIndex_COUNT; ScorbotJointNum++) {
 
-  Serial.println("STOP");
-  stopMotor(MOTOR_BASE);
-  delay(1000);
+    Serial.println(SCORBOT[ScorbotJointNum].name);
 
-  Serial.println("Spinning CCW at 25% speed...");
-  moveMotor(MOTOR_BASE, 25, false);  // CCW at 25% speed
-  delay(3000);
+    Serial.println("CW");
+    moveMotor(ScorbotJointNum, 50, true);  
+    delay(2000);
 
-  Serial.println("STOP");
-  stopMotor(MOTOR_BASE);
-  delay(1000);
+    stopMotor(ScorbotJointNum);
+    delay(1000);
+
+    Serial.println("CCW");
+    moveMotor(ScorbotJointNum, 50, false);  
+    delay(2000);
+
+    Serial.println("");
+    stopMotor(ScorbotJointNum);
+    delay(1000);
+    
+
+  }
 }
