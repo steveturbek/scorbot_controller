@@ -1,22 +1,28 @@
 /*
-  SCORBOT Base Motor - HOMING SYSTEM with STALL DETECTION
+  SCORBOT Base Motor - HOMING SYSTEM with RANGE CALIBRATION (POLLING VERSION)
+
+The goal for this program is for me to learn but also to write and test functions for scorbot.h to use later.
+
+  This version uses POLLING instead of interrupts for encoder reading.
+  All encoder pins are polled in the main loop for accurate tracking.
 
   This implements a complete homing system with:
-  - Encoder-based position tracking
+  - Encoder-based position tracking (polled, not interrupt-driven)
   - Microswitch home position detection
   - Stall detection to prevent damage
+  - Automatic range calibration (finds CW and CCW limits from home)
   - Software limits after homing
   - Bidirectional search algorithm
 
-  Hardware connections:
+  Hardware connections (from scorbot.h):
   - Motor Control (L298N Board 1):
-    - Motor DIR1: pin 22 (IN1)
-    - Motor DIR2: pin 23 (IN2)
-    - Motor PWM: pin 2 (ENA)
+    - Motor DIR1 (CCW): pin 23 (IN1)
+    - Motor DIR2 (CW): pin 22 (IN2)
+    - Motor PWM: pin 7 (ENA)
 
   - Encoder (Base Motor):
-    - Encoder P0: pin 18 (interrupt capable)
-    - Encoder P1: pin 19 (interrupt capable)
+    - Encoder P0: pin 34 (not interrupt-capable)
+    - Encoder P1: pin 35 (not interrupt-capable)
 
   - Home Microswitch:
     - Base switch: pin 46 (active LOW with internal pullup)
@@ -34,16 +40,17 @@
 // PIN DEFINITIONS
 // ============================================================================
 
+#include <Arduino.h>
 #include "/Users/steveturbek/Documents/scorbot_controller/scorbot_controller/scorbot.h"
 
 // ============================================================================
 // HOMING PARAMETERS
 // ============================================================================
 
-#define HOMING_SEARCH_SPEED 50      // PWM value for initial search (0-255)
+#define HOMING_SEARCH_SPEED 200      // PWM value for initial search (0-255)
 #define HOMING_APPROACH_SPEED 30     // PWM value for final approach
 #define HOMING_BACKOFF_COUNTS 50     // Encoder counts to back off after finding switch
-#define HOMING_TIMEOUT_MS 10000      // Max time to find home switch
+#define HOMING_TIMEOUT_MS 100000      // Max time to find home switch
 
 // ============================================================================
 // STALL DETECTION PARAMETERS
@@ -73,6 +80,9 @@ enum HomingState {
   HOMING_SEARCH_CW,  // Searching CW for home switch (if CCW stalled)
   HOMING_BACKOFF,    // Back away from switch slightly
   HOMING_APPROACH,   // Slow final approach for accuracy
+  CALIBRATING_CW_RANGE,   // Move CW until stall to find max range
+  CALIBRATING_CCW_RANGE,  // Move CCW until stall to find max range
+  RETURN_TO_HOME,    // Returning to home switch after calibration
   HOMED,             // Home found, position = 0, ready for operation
   FAULT              // Error state
 };
@@ -84,6 +94,9 @@ const char* stateNames[] = {
   "HOMING_SEARCH_CW",
   "HOMING_BACKOFF",
   "HOMING_APPROACH",
+  "CALIBRATING_CW_RANGE",
+  "CALIBRATING_CCW_RANGE",
+  "RETURN_TO_HOME",
   "HOMED",
   "FAULT"
 };
@@ -92,9 +105,9 @@ const char* stateNames[] = {
 // GLOBAL VARIABLES
 // ============================================================================
 
-// Encoder tracking
-volatile long encoderCount = 0;
-volatile int lastEncoded = 0;
+// Encoder tracking (NOT volatile since we're polling, not using interrupts)
+long encoderCount = 0;
+int lastEncoded = 0;
 
 // Stall detection
 long lastEncoderCount = 0;
@@ -108,17 +121,24 @@ long backoffTargetCount = 0;
 bool triedCCW = false;
 bool triedCW = false;
 
+// Range calibration
+long maxCWFromHome = 0;
+long maxCCWFromHome = 0;
+unsigned long lastEncoderPrintTime = 0;
+const unsigned long ENCODER_PRINT_INTERVAL_MS = 100;  // Print every 100ms
+unsigned long returnToHomeStartTime = 0;
+
 // Debouncing
 unsigned long lastSwitchDebounceTime = 0;
 const int SWITCH_DEBOUNCE_MS = 10;
 
 // ============================================================================
-// ENCODER INTERRUPT HANDLERS
+// ENCODER READING (POLLED VERSION)
 // ============================================================================
 
 void updateEncoder() {
-  int MSB = digitalRead(BASE_ENCODER_P0);
-  int LSB = digitalRead(BASE_ENCODER_P1);
+  int MSB = digitalRead(SCORBOT_REF[MOTOR_BASE].encoder_p0_pin);
+  int LSB = digitalRead(SCORBOT_REF[MOTOR_BASE].encoder_p1_pin);
 
   int encoded = (MSB << 1) | LSB;
   int sum = (lastEncoded << 2) | encoded;
@@ -139,23 +159,23 @@ void updateEncoder() {
 // ============================================================================
 
 void stopMotor() {
-  digitalWrite(BASE_MOTOR_DIR1, LOW);
-  digitalWrite(BASE_MOTOR_DIR2, LOW);
-  analogWrite(BASE_MOTOR_PWM, 0);
+  digitalWrite(SCORBOT_REF[MOTOR_BASE].CCW_pin, LOW);
+  digitalWrite(SCORBOT_REF[MOTOR_BASE].CW_pin, LOW);
+  analogWrite(SCORBOT_REF[MOTOR_BASE].pwm_pin, 0);
   motorActive = false;
 }
 
 void moveMotorCW(int speed) {
-  digitalWrite(BASE_MOTOR_DIR1, HIGH);
-  digitalWrite(BASE_MOTOR_DIR2, LOW);
-  analogWrite(BASE_MOTOR_PWM, speed);
+  digitalWrite(SCORBOT_REF[MOTOR_BASE].CW_pin, HIGH);
+  digitalWrite(SCORBOT_REF[MOTOR_BASE].CCW_pin, LOW);
+  analogWrite(SCORBOT_REF[MOTOR_BASE].pwm_pin, speed);
   motorActive = true;
 }
 
 void moveMotorCCW(int speed) {
-  digitalWrite(BASE_MOTOR_DIR1, LOW);
-  digitalWrite(BASE_MOTOR_DIR2, HIGH);
-  analogWrite(BASE_MOTOR_PWM, speed);
+  digitalWrite(SCORBOT_REF[MOTOR_BASE].CCW_pin, HIGH);
+  digitalWrite(SCORBOT_REF[MOTOR_BASE].CW_pin, LOW);
+  analogWrite(SCORBOT_REF[MOTOR_BASE].pwm_pin, speed);
   motorActive = true;
 }
 
@@ -165,7 +185,7 @@ void moveMotorCCW(int speed) {
 
 bool isHomeSwitchPressed() {
   // Active LOW switch with pullup
-  if (digitalRead(BASE_SWITCH) == LOW) {
+  if (digitalRead(SCORBOT_REF[MOTOR_BASE].home_switch_pin) == LOW) {
     // Simple debounce
     if (millis() - lastSwitchDebounceTime > SWITCH_DEBOUNCE_MS) {
       lastSwitchDebounceTime = millis();
@@ -194,7 +214,7 @@ bool checkStall() {
 
       // If stalled for STALL_THRESHOLD_MS, declare stall
       if (stallCounter * STALL_CHECK_INTERVAL_MS >= STALL_THRESHOLD_MS) {
-        Serial.println("!!! STALL DETECTED !!!");
+        Serial.println("STALL DETECTED");
         stallCounter = 0;
         return true;
       }
@@ -224,9 +244,7 @@ bool isNearLimit() {
 // ============================================================================
 
 void startHoming() {
-  Serial.println("\n========================================");
   Serial.println("STARTING HOMING SEQUENCE");
-  Serial.println("========================================");
 
   stopMotor();
   currentState = HOMING_SEARCH_CCW;
@@ -242,7 +260,6 @@ void startHoming() {
 void updateHomingStateMachine() {
   // Check for timeout
   if (millis() - homingStartTime > HOMING_TIMEOUT_MS) {
-    Serial.println("\n!!! HOMING TIMEOUT !!!");
     Serial.println("Failed to find home switch within timeout period");
     currentState = FAULT;
     stopMotor();
@@ -356,19 +373,16 @@ void updateHomingStateMachine() {
         encoderCount = 0;
         lastEncoderCount = 0;
 
-        Serial.println("\n========================================");
-        Serial.println("HOMING COMPLETE!");
-        Serial.println("========================================");
+        Serial.println("HOME POSITION FOUND!");
         Serial.println("Position set to 0 (home)");
-        Serial.print("Software limits: ");
-        Serial.print(MAX_POSITION_CCW);
-        Serial.print(" to ");
-        Serial.println(MAX_POSITION_CW);
-        Serial.println("\nReady for operation!");
-        Serial.println("Commands: '+' = CW, '-' = CCW, 's' = stop, 'p' = position");
-        Serial.println("========================================\n");
+        Serial.println("Starting range calibration...");
+        Serial.println("Moving CW to find maximum range from home");
 
-        currentState = HOMED;
+        // Start calibration
+        currentState = CALIBRATING_CW_RANGE;
+        stallCounter = 0;
+        lastEncoderPrintTime = millis();
+        moveMotorCW(HOMING_SEARCH_SPEED);
         return;
       }
 
@@ -378,6 +392,152 @@ void updateHomingStateMachine() {
         Serial.println("This shouldn't happen. Check mechanics.");
         currentState = FAULT;
         stopMotor();
+        return;
+      }
+      break;
+
+    case CALIBRATING_CW_RANGE:
+      // Print encoder count periodically
+      // if (millis() - lastEncoderPrintTime >= ENCODER_PRINT_INTERVAL_MS) {
+      //  Serial.print("CW Range: " + encoderCount +" counts from home");
+      //   lastEncoderPrintTime = millis();
+      // }
+
+      // Check for stall (reached limit)
+      if (checkStall()) {
+        maxCWFromHome = encoderCount;
+        stopMotor();
+        delay(100);
+
+        Serial.print("MAX_CW_FROM_HOME: ");
+        Serial.print(maxCWFromHome);
+        Serial.println(" counts");
+        Serial.println("\nReturning to home position...");
+
+        // Return to home
+        currentState = CALIBRATING_CCW_RANGE;
+        stallCounter = 0;
+        lastEncoderPrintTime = millis();
+
+        // Move CCW back past home, then search CCW for limit
+        Serial.println("Moving CCW to find maximum range from home");
+        moveMotorCCW(HOMING_SEARCH_SPEED);
+        return;
+      }
+      break;
+
+    case CALIBRATING_CCW_RANGE:
+      // Print encoder count periodically
+      // if (millis() - lastEncoderPrintTime >= ENCODER_PRINT_INTERVAL_MS) {
+      //   Serial.print("CCW Range: " + encoderCount + " counts from home");
+      //   lastEncoderPrintTime = millis();
+      // }
+
+      // Check for stall (reached limit)
+      if (checkStall()) {
+        maxCCWFromHome = encoderCount;
+        stopMotor();
+        delay(100);
+
+        Serial.print("MAX_CCW_FROM_HOME: ");
+        Serial.print(maxCCWFromHome);
+        Serial.println(" counts");
+        Serial.println("CALIBRATION COMPLETE!");
+        Serial.print("CW Limit:  ");
+        Serial.print(maxCWFromHome);
+        Serial.println(" counts from home");
+        Serial.print("CCW Limit: ");
+        Serial.print(maxCCWFromHome);
+        Serial.println(" counts from home");
+        Serial.print("Total Range: ");
+        Serial.print(abs(maxCWFromHome - maxCCWFromHome));
+        Serial.println(" encoder counts");
+        Serial.println("\nReturning to home position...");
+        Serial.print("Current position: ");
+        Serial.print(encoderCount);
+        Serial.println(" counts");
+
+        // Transition to return to home state
+        currentState = RETURN_TO_HOME;
+        returnToHomeStartTime = millis();
+        stallCounter = 0;
+        lastEncoderPrintTime = millis();
+
+        // Determine which direction to move based on current position
+        if (abs(encoderCount) > 50) {  // Only move if we're far from home
+          if (encoderCount > 0) {
+            // We're on the positive side, need to go opposite direction
+            Serial.println("Moving CCW toward home...");
+            moveMotorCCW(HOMING_SEARCH_SPEED);
+          } else {
+            // We're on the negative side, need to go opposite direction
+            Serial.println("Moving CW toward home...");
+            moveMotorCW(HOMING_SEARCH_SPEED);
+          }
+        } else {
+          // Already at home, skip to HOMED state
+          Serial.println("Already at home position!");
+          encoderCount = 0;
+          currentState = HOMED;
+        }
+        return;
+      }
+      break;
+
+    case RETURN_TO_HOME:
+      // Print position periodically
+      // if (millis() - lastEncoderPrintTime >= ENCODER_PRINT_INTERVAL_MS) {
+      //   Serial.print("Returning to home - Position: ");
+      //   Serial.println(encoderCount);
+      //   lastEncoderPrintTime = millis();
+      // }
+
+      // Check if we've reached home switch
+      if (isHomeSwitchPressed()) {
+        stopMotor();
+        delay(50);
+        encoderCount = 0;  // Reset to home
+
+        Serial.println("Home switch reached!");
+        Serial.println("\n========================================");
+        Serial.println("READY FOR OPERATION!");
+        Serial.println("========================================");
+        Serial.println("Commands: '+' = CW, '-' = CCW, 's' = stop, 'p' = position");
+        Serial.println("========================================\n");
+
+        currentState = HOMED;
+        return;
+      }
+
+      // Check for stall (hit something or wrong direction)
+      if (checkStall()) {
+        Serial.println("\n!!! STALL while returning to home !!!");
+        Serial.print("Current position: ");
+        Serial.println(encoderCount);
+        Serial.println("This likely means the motor is moving in the wrong direction.");
+        Serial.println("Reversing direction...");
+
+        stopMotor();
+        delay(100);
+        stallCounter = 0;
+
+        // Reverse direction
+        if (encoderCount > 0) {
+          Serial.println("Trying CW direction...");
+          moveMotorCW(HOMING_SEARCH_SPEED);
+        } else {
+          Serial.println("Trying CCW direction...");
+          moveMotorCCW(HOMING_SEARCH_SPEED);
+        }
+        return;
+      }
+
+      // Timeout safety
+      if (millis() - returnToHomeStartTime > 30000) {
+        Serial.println("\n!!! TIMEOUT returning to home !!!");
+        Serial.println("Failed to find home switch within 30 seconds.");
+        stopMotor();
+        currentState = FAULT;
         return;
       }
       break;
@@ -475,39 +635,17 @@ void setup() {
     ; // Wait for serial port
   }
 
-  Serial.println("\n\n");
-  Serial.println("========================================");
-  Serial.println("SCORBOT BASE MOTOR - HOMING SYSTEM");
-  Serial.println("========================================");
-  Serial.println("Firmware version: 1.0");
-  Serial.println("Date: 2026-01-07");
-  Serial.println();
 
-  // Setup motor pins
-  pinMode(BASE_MOTOR_DIR1, OUTPUT);
-  pinMode(BASE_MOTOR_DIR2, OUTPUT);
-  pinMode(BASE_MOTOR_PWM, OUTPUT);
+  // Setup base motor using scorbot.h helper function
+  // This configures motor pins, encoder pins, and home switch
+  setupMotor(MOTOR_BASE);
   stopMotor();
-  Serial.println("[OK] Motor pins configured");
 
-  // Setup encoder pins with interrupts
-  pinMode(BASE_ENCODER_P0, INPUT_PULLUP);
-  pinMode(BASE_ENCODER_P1, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(BASE_ENCODER_P0), updateEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(BASE_ENCODER_P1), updateEncoder, CHANGE);
-  Serial.println("[OK] Encoder configured");
-
-  // Setup microswitch
-  pinMode(BASE_SWITCH, INPUT_PULLUP);
-  Serial.println("[OK] Home switch configured");
-
-  Serial.println();
-  Serial.println("========================================");
-  Serial.println("READY - Awaiting homing command");
-  Serial.println("========================================");
+  Serial.println("\n\n========================================");
+  Serial.println("SCORBOT BASE MOTOR TEST");
   Serial.println("Send 'h' to start homing sequence");
   Serial.println("Send 'p' to print status");
-  Serial.println("========================================\n");
+  Serial.println();
 
   lastEncoderCheckTime = millis();
 }
@@ -517,6 +655,9 @@ void setup() {
 // ============================================================================
 
 void loop() {
+  // CRITICAL: Poll encoder every loop for accurate tracking
+  updateEncoder();
+
   // Process serial commands
   if (Serial.available() > 0) {
     char cmd = Serial.read();
@@ -528,6 +669,7 @@ void loop() {
         break;
 
       case '+':
+      case '=':
         moveManualCW();
         break;
 
@@ -569,7 +711,7 @@ void loop() {
     }
   }
 
-  // Update homing state machine
+  // Update homing state machine (includes calibration states)
   if (currentState != UNINITIALIZED && currentState != HOMED && currentState != FAULT) {
     updateHomingStateMachine();
   }
@@ -601,6 +743,7 @@ void loop() {
     }
   }
 
-  // Small delay to prevent overwhelming serial and allow time for stall detection
-  delay(10);
+  // Small delay to keep serial responsive
+  // Note: We can't delay too much or we'll miss encoder pulses
+  delay(1);
 }

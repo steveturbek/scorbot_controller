@@ -31,8 +31,10 @@ The goals of the project are to
 
 ## TODO
 
-- [] write arduino code to get arm to move to home position
-- [] check / set cams so microswitches are in centerpoint of movement
+- [] make 'home' the CW clockwise side of the microswitch. ~200 encoder steps from one side to the other.
+- [] add 'middle' command to move joint to centerpoint of movement, so plastic cam cover can be moved there
+- [] gripper home needs to be explored / defined
+- [x] write arduino code to get arm to move to home position
 - [x] make replacement microswitch cams
 
 ## Project Log
@@ -42,6 +44,13 @@ The goals of the project are to
   - Rough layout of parts on a board - the motors move!
   - modeled and printed controller case. Much easier thinking after just picking a layout. next time would just print base and areas under the ports.
   - Wired up mega, DB-50 connector and 3 L298N's. My soldering skills are very limited. I would use screw terminal shield for the Arduino Mega next time.
+  - motors are working, basically. appear a bit slow, but power supply seems to be working. Desktop power supply reads roughly .5amps when motors are running.
+  - the motors seems to need a high PWM value to move at all. I tested voltage across 12v power supply and PWM and appear in range.
+  - `scorbot.h` is where I'm storing definitions and shared functions
+  - `/helpers/` has working test files
+  - `helpers/pin_test/pin_test.ino` was looking for shorts, etc in the arduino mega pins, due to my clumsy work. surprisingly I got it right on the first try
+  - `helpers/motor_only_test/motor_only_test.ino` just moves the motors back and forth
+  - `helpers/base_motor_test/base_motor_test.ino` is testing for homing and encoders for just the base motor
 
 - December 2025
 
@@ -79,7 +88,7 @@ The goals of the project are to
 
 ## Scorbot Description
 
-[Scorbot ER III Manual](https://www.theoldrobots.com/book45/ER3-Manual.pdf)
+[Scorbot ER III Manual](/references/ER3-Manual.pdf)
 
 ### Summary
 
@@ -122,7 +131,7 @@ The goals of the project are to
 
 ### Scorbot Cable connector
 
-The Scorbot cable connector is an unusual [DB 50](https://en.wikipedia.org/wiki/D-subminiature) cable. Connectors and breakout boards that fit are available at Amazon or Ali Express. [DB 50 connector Specification](https://www.farnell.com/datasheets/1656989.pdf) [DB50 diagram](https://upload.wikimedia.org/wikipedia/commons/a/af/DD50_Diagram.svg)
+The Scorbot cable connector is an [DB 50](https://en.wikipedia.org/wiki/D-subminiature) cable. Connectors and breakout boards that fit are available at Amazon or Ali Express. [DB 50 connector Specification](https://www.farnell.com/datasheets/1656989.pdf) [DB50 diagram](https://upload.wikimedia.org/wikipedia/commons/a/af/DD50_Diagram.svg)
 
 Here is the pin numbers (looking at the male scorbot cable connector pins)
 
@@ -161,7 +170,7 @@ Here is the pin numbers (looking at the male scorbot cable connector pins)
 | 19        | 6     | Gripper     | Encoder P1           | 45          |             |             |              |                           |
 | 20        | 4     | Wrist Pitch | Encoder P1           | 41          |             |             |              |                           |
 | 21        | 2     | Shoulder    | Encoder P1           | 37          |             |             |              |                           |
-| 22        | 6     | Gripper     | Microswitch          | 51          |             |             |              | manual says not connected |
+| 22        | 6     | Gripper     | Microswitch          | -           |             |             |              | manual says not connected |
 | 23        | 1     | Base        | Microswitch          | 46          |             |             |              |                           |
 | 24        | 3     | Elbow       | Microswitch          | 48          |             |             |              |                           |
 | 25        | 6     | Gripper     | Encoder LED          | 5V via 47Ω  |             |             |              |                           |
