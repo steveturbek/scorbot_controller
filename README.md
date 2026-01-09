@@ -34,6 +34,8 @@ The goals of the project are to
 - [] make 'home' the CW clockwise side of the microswitch. ~200 encoder steps from one side to the other.
 - [] add 'middle' command to move joint to centerpoint of movement, so plastic cam cover can be moved there
 - [] gripper home needs to be explored / defined
+- [] wrist pitch and roll movements depend on motors 4-5 working together differential drive
+- [] shoulder find home
 - [x] write arduino code to get arm to move to home position
 - [x] make replacement microswitch cams
 
@@ -51,6 +53,8 @@ The goals of the project are to
   - `helpers/pin_test/pin_test.ino` was looking for shorts, etc in the arduino mega pins, due to my clumsy work. surprisingly I got it right on the first try
   - `helpers/motor_only_test/motor_only_test.ino` just moves the motors back and forth
   - `helpers/base_motor_test/base_motor_test.ino` is testing for homing and encoders for just the base motor
+  - [Scorbot ER-4U][https://www.theoldrobots.com/book45/ER4u_User_Manual.pdf] seems to be essentially the same machine
+  - note that Shoulder, Elbow, Wrist Pitch are built in such a way that wrist pitch remains consistent relative as shoulder and elbow move. Moving the shoulder does NOT simply swing the gripper tip relative to the shoulder. Moving the shoulder rotates the elbow to keep the wrist pitch steady. This is cool / confusing. probably needs kinematics
 
 - December 2025
 
