@@ -5,7 +5,6 @@ This file defines all Arduino Mega pin assignments for the Scorbot robot.
 Include this file in any sketch to ensure consistent pin usage.
 
 Based on DB-50 connector wiring and L298N motor driver configuration.
-Last updated: 2026-01-08
 
 
   Access motor pins through the `SCORBOT_REF[]` array:
@@ -133,8 +132,8 @@ const Scorbot_joints_reference SCORBOT_REF[ScorbotJointIndex_COUNT] = {
 // ============================================================================
 // L298N Board 2, Motor B (Output 2)
   [MOTOR_WRIST_PITCH] = {
-    .CCW_pin = 28,
-    .CW_pin = 29,
+    .CCW_pin = 29,
+    .CW_pin = 28,
     .pwm_pin = 4,
     .encoder_p0_pin = 40,
     .encoder_p1_pin = 41,
@@ -533,7 +532,7 @@ inline void startHomingAll() {
 }
 
 // Forward declarations - implemented in .ino
-void updateGoal(int motorIndex);
-void updateAllGoals();
+void doGoal(int motorIndex);
+void doAllGoals();
 
 #endif // SCORBOT_PINS_H
