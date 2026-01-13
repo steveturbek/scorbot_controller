@@ -15,6 +15,7 @@
   - '0'-'5' = Select motor (0=base, 1=shoulder, etc.)
   - 'f' = Find home for selected motor only
   - 'c' = Calibrate range for selected motor (must be homed first)
+  - 'g' = Go to home position for selected motor (must be homed first)
   - '+' = Move selected motor CW
   - '-' = Move selected motor CCW
   - 's' = Stop selected motor
@@ -58,6 +59,7 @@ void setup() {
   Serial.println("  0-5     = Select motor");
   Serial.println("  f       = Find home (selected motor)");
   Serial.println("  c       = Calibrate (selected motor)");
+  Serial.println("  g       = Go to home (selected motor)");
   Serial.println("  +/-     = Jog selected motor");
   Serial.println("  s/S     = Stop selected/all");
   Serial.println("  p       = Print status (all motors)");
@@ -83,7 +85,7 @@ void loop() {
   processSerialCommands();
 
   // Update all active goals
-  updateAllGoals();
+  doAllGoals();
 
   // Safety monitoring
   performSafetyChecks();
@@ -145,14 +147,30 @@ void processSerialCommands() {
         }
         break;
 
+      case 'g':
+      case 'G':
+        if (selectedMotor >= 0) {
+          if (jointState[selectedMotor].hasFoundHome) {
+            Serial.print("Returning to home: ");
+            Serial.println(SCORBOT_REF[selectedMotor].name);
+            jointState[selectedMotor].targetPosition = 0;
+            setGoal(selectedMotor, GOAL_MOVE_TO);
+          } else {
+            Serial.println("Must find home first (press 'f')");
+          }
+        } else {
+          Serial.println("No motor selected");
+        }
+        break;
+
       case '+':
       case '=':
-        moveSelectedMotorCW();
+        jogSelectedMotorCW();
         break;
 
       case '-':
       case '_':
-        moveSelectedMotorCCW();
+        jogSelectedMotorCCW();
         break;
 
       case 's':
@@ -211,16 +229,16 @@ void processSerialCommands() {
 // ============================================================================
 
 // Update all active goals
-void updateAllGoals() {
+void doAllGoals() {
   for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
     if (jointState[i].currentGoal != GOAL_IDLE &&
         jointState[i].currentGoal != GOAL_FAULT) {
-      updateGoal(i);
+      doGoal(i);
     }
   }
 }
 
-void updateGoal(int motorIndex) {
+void doGoal(int motorIndex) {
   if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT) return;
 
   MotorGoal goal = jointState[motorIndex].currentGoal;
@@ -238,15 +256,15 @@ void updateGoal(int motorIndex) {
 
   switch (goal) {
     case GOAL_FIND_HOME:
-      updateGoalFindHome(motorIndex);
+      doGoalFindHome(motorIndex);
       break;
 
     case GOAL_CALIBRATE_RANGE:
-      updateGoalCalibrateRange(motorIndex);
+      doGoalCalibrateRange(motorIndex);
       break;
 
     case GOAL_MOVE_TO:
-      updateGoalMoveTo(motorIndex);
+      doGoalMoveTo(motorIndex);
       break;
 
     case GOAL_IDLE:
@@ -260,72 +278,86 @@ void updateGoal(int motorIndex) {
 // GOAL: FIND_HOME
 // ============================================================================
 
-void updateGoalFindHome(int motorIndex) {
-  // Found home switch
-  if (isHomeSwitchPressed(motorIndex)) {
-    if (!jointState[motorIndex].backingOff) {
-      // First contact - back off
-      stopMotor(motorIndex);
-      delay(50);
-      jointState[motorIndex].backoffTargetCount =
-        jointState[motorIndex].encoderCount - HOMING_BACKOFF_COUNTS;
-      jointState[motorIndex].backingOff = true;
-      moveMotorCW(motorIndex, HOMING_SEARCH_SPEED);
-      return;
-    } else {
-      // Final approach complete - home found!
-      stopMotor(motorIndex);
-      jointState[motorIndex].encoderCount = 0;
-      jointState[motorIndex].hasFoundHome = true;
-      setGoal(motorIndex, GOAL_CALIBRATE_RANGE); // Auto-start calibration
-      Serial.print(SCORBOT_REF[motorIndex].name);
-      Serial.println(": Home found. Starting calibration...");
-      return;
-    }
-  }
-
-  // Backing off from switch
-  if (jointState[motorIndex].backingOff) {
-    if (jointState[motorIndex].encoderCount >=
-        jointState[motorIndex].backoffTargetCount) {
-      // Backoff complete, slow approach
-      stopMotor(motorIndex);
-      delay(50);
-      moveMotorCCW(motorIndex, HOMING_APPROACH_SPEED);
-    }
+void doGoalFindHome(int motorIndex) {
+  // If we find the switch and we've searched BOTH directions (moved CW off switch, then back CCW), this is the CW edge
+  if (isHomeSwitchPressed(motorIndex) &&
+      jointState[motorIndex].searchedCW &&
+      jointState[motorIndex].searchedCCW) {
+    stopMotor(motorIndex);
+    jointState[motorIndex].encoderCount = 0;  // Set CW edge as zero
+    jointState[motorIndex].hasFoundHome = true;
+    setGoal(motorIndex, GOAL_IDLE);
+    Serial.print(SCORBOT_REF[motorIndex].name);
+    Serial.println(": Home found at CCW side of switch.");
     return;
   }
 
-  // Still searching
+  // If switch is NOT pressed and we haven't moved yet, start by checking if we're already on the switch
   if (!jointState[motorIndex].motorActive) {
-    // Start search (try CCW first)
-    moveMotorCCW(motorIndex, HOMING_SEARCH_SPEED);
+    // Check if we're starting on the switch - if so, move CW to get off it first
+    if (isHomeSwitchPressed(motorIndex)) {
+      Serial.print(SCORBOT_REF[motorIndex].name);
+      Serial.println(": Starting on switch, moving CW to clear it...");
+      moveMotorCW(motorIndex, 255);
+      jointState[motorIndex].searchedCW = true;
+      return;
+    } else {
+      // Not on switch - start search by moving CCW to find it
+      Serial.print(SCORBOT_REF[motorIndex].name);
+      Serial.println(": Starting CCW search...");
+      moveMotorCCW(motorIndex, 255);
+      jointState[motorIndex].searchedCCW = true;
+      return;
+    }
+  }
+
+  // If we're moving CW (to clear the switch) and switch is no longer pressed, reverse direction
+  if (jointState[motorIndex].searchedCW && !jointState[motorIndex].searchedCCW &&
+      !isHomeSwitchPressed(motorIndex)) {
+    stopMotor(motorIndex);
+    delay(50);
+    Serial.print(SCORBOT_REF[motorIndex].name);
+    Serial.println(": Switch cleared, reversing to find CW edge...");
+    // Reset stall detection for new movement
+    jointState[motorIndex].stallCounter = 0;
+    jointState[motorIndex].lastEncoderCount = jointState[motorIndex].encoderCount;
+    jointState[motorIndex].lastEncoderCheckTime = millis();
+    moveMotorCCW(motorIndex, 255);
     jointState[motorIndex].searchedCCW = true;
     return;
   }
 
-  // Check for stall (hit limit)
+  // Check for stall (hit limit) - only applies during initial search, not during controlled approach
   if (checkStall(motorIndex)) {
     stopMotor(motorIndex);
     delay(100);
 
+    // Check if we've tried both directions during initial search
     if (jointState[motorIndex].searchedCCW && !jointState[motorIndex].searchedCW) {
-      // Try CW
+      // CCW stalled without finding switch - try CW
       Serial.print(SCORBOT_REF[motorIndex].name);
-      Serial.println(": Trying CW");
+      Serial.println(": CCW stalled, trying CW");
       jointState[motorIndex].searchedCW = true;
-      moveMotorCW(motorIndex, HOMING_SEARCH_SPEED);
+      moveMotorCW(motorIndex, 255);
     } else if (jointState[motorIndex].searchedCW && !jointState[motorIndex].searchedCCW) {
-      // Try CCW
+      // CW stalled - try CCW
       Serial.print(SCORBOT_REF[motorIndex].name);
-      Serial.println(": Trying CCW");
+      Serial.println(": CW stalled, trying CCW");
       jointState[motorIndex].searchedCCW = true;
-      moveMotorCCW(motorIndex, HOMING_SEARCH_SPEED);
-    } else {
-      // Both directions stalled - FAULT
-      Serial.print(SCORBOT_REF[motorIndex].name);
-      Serial.println(": FAULT - stalled both directions");
-      setGoal(motorIndex, GOAL_FAULT);
+      moveMotorCCW(motorIndex, 255);
+    } else if (jointState[motorIndex].searchedCW && jointState[motorIndex].searchedCCW) {
+      // Tried both directions and stalled - could be in approach phase OR couldn't find switch
+      // Only fault if we never found the switch
+      if (!jointState[motorIndex].hasFoundHome) {
+        Serial.print(SCORBOT_REF[motorIndex].name);
+        Serial.println(": FAULT - home switch not found in either direction");
+        setGoal(motorIndex, GOAL_FAULT);
+      } else {
+        // We found home before, so this is a stall during approach
+        Serial.print(SCORBOT_REF[motorIndex].name);
+        Serial.println(": FAULT - stalled during approach to switch");
+        setGoal(motorIndex, GOAL_FAULT);
+      }
     }
   }
 }
@@ -334,7 +366,7 @@ void updateGoalFindHome(int motorIndex) {
 // GOAL: CALIBRATE_RANGE
 // ============================================================================
 
-void updateGoalCalibrateRange(int motorIndex) {
+void doGoalCalibrateRange(int motorIndex) {
   // Must have home first
   if (!jointState[motorIndex].hasFoundHome) {
     Serial.println("Error: Need home before calibrating");
@@ -342,27 +374,11 @@ void updateGoalCalibrateRange(int motorIndex) {
     return;
   }
 
-  // Phase 1: Find CW limit
-  if (jointState[motorIndex].maxEncoderStepsFromHomeCW == 0) {
+  // Phase 1: Find CCW limit (move away from home first)
+  if (jointState[motorIndex].calibrationPhase == 1) {
     if (!jointState[motorIndex].motorActive) {
-      moveMotorCW(motorIndex, HOMING_SEARCH_SPEED);
-    }
-
-    if (checkStall(motorIndex)) {
-      jointState[motorIndex].maxEncoderStepsFromHomeCW =
-        jointState[motorIndex].encoderCount;
       Serial.print(SCORBOT_REF[motorIndex].name);
-      Serial.print(": CW limit = ");
-      Serial.println(jointState[motorIndex].maxEncoderStepsFromHomeCW);
-      stopMotor(motorIndex);
-      delay(100);
-    }
-    return;
-  }
-
-  // Phase 2: Find CCW limit
-  if (jointState[motorIndex].maxEncoderStepsFromHomeCCW == 0) {
-    if (!jointState[motorIndex].motorActive) {
+      Serial.println(": Finding CCW limit...");
       moveMotorCCW(motorIndex, HOMING_SEARCH_SPEED);
     }
 
@@ -371,53 +387,86 @@ void updateGoalCalibrateRange(int motorIndex) {
         jointState[motorIndex].encoderCount;
       Serial.print(SCORBOT_REF[motorIndex].name);
       Serial.print(": CCW limit = ");
-      Serial.println(jointState[motorIndex].maxEncoderStepsFromHomeCCW);
+      Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCCW);
+      Serial.print(" (");
+      Serial.print(abs(jointState[motorIndex].maxEncoderStepsFromHomeCCW));
+      Serial.println(" steps from home)");
       stopMotor(motorIndex);
       delay(100);
+      jointState[motorIndex].calibrationPhase = 2;  // Move to phase 2
     }
     return;
   }
 
-  // Phase 3: Return to home
-  if (abs(jointState[motorIndex].encoderCount) > HOME_POSITION_TOLERANCE) {
+  // Phase 2: Find CW limit (move back through home toward CW)
+  // IMPORTANT: Ignore home switch during this phase - we're passing through it
+  if (jointState[motorIndex].calibrationPhase == 2) {
     if (!jointState[motorIndex].motorActive) {
-      // Move toward home
-      if (jointState[motorIndex].encoderCount > 0) {
-        moveMotorCCW(motorIndex, HOMING_SEARCH_SPEED);
-      } else {
-        moveMotorCW(motorIndex, HOMING_SEARCH_SPEED);
-      }
+      Serial.print(SCORBOT_REF[motorIndex].name);
+      Serial.println(": Finding CW limit...");
+      moveMotorCW(motorIndex, HOMING_SEARCH_SPEED);
     }
 
-    if (isHomeSwitchPressed(motorIndex)) {
-      stopMotor(motorIndex);
-      jointState[motorIndex].encoderCount = 0;
-      setGoal(motorIndex, GOAL_IDLE);
+    if (checkStall(motorIndex)) {
+      jointState[motorIndex].maxEncoderStepsFromHomeCW =
+        jointState[motorIndex].encoderCount;
       Serial.print(SCORBOT_REF[motorIndex].name);
-      Serial.print(": Calibration complete. Range: [");
-      Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCCW);
-      Serial.print(" to ");
+      Serial.print(": CW limit = ");
       Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCW);
-      Serial.println("]");
+      Serial.print(" (");
+      Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCW);
+      Serial.println(" steps from home)");
+      stopMotor(motorIndex);
+      delay(100);
+      jointState[motorIndex].calibrationPhase = 3;  // Move to phase 3
     }
     return;
   }
 
-  // Already at home - done!
-  setGoal(motorIndex, GOAL_IDLE);
-  Serial.print(SCORBOT_REF[motorIndex].name);
-  Serial.print(": Calibration complete. Range: [");
-  Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCCW);
-  Serial.print(" to ");
-  Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCW);
-  Serial.println("]");
+  // Phase 3: Return to home (approach from CW side for consistency)
+  if (jointState[motorIndex].calibrationPhase == 3) {
+    if (abs(jointState[motorIndex].encoderCount) > HOME_POSITION_TOLERANCE) {
+      if (!jointState[motorIndex].motorActive) {
+        // Move toward home from whichever side we're on
+        if (jointState[motorIndex].encoderCount > 0) {
+          // We're on CW side, move CCW toward home
+          moveMotorCCW(motorIndex, HOMING_SEARCH_SPEED);
+        } else {
+          // We're on CCW side, move CW toward home
+          moveMotorCW(motorIndex, HOMING_SEARCH_SPEED);
+        }
+      }
+
+      // When we hit the switch, set position to 0 (CW edge)
+      if (isHomeSwitchPressed(motorIndex)) {
+        stopMotor(motorIndex);
+        jointState[motorIndex].encoderCount = 0;
+        setGoal(motorIndex, GOAL_IDLE);
+        Serial.print(SCORBOT_REF[motorIndex].name);
+        Serial.print(": Calibration complete. CCW to home: ");
+        Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCCW);
+        Serial.print(" CW to home:");
+        Serial.println(jointState[motorIndex].maxEncoderStepsFromHomeCW);
+      }
+      return;
+    }
+
+    // Already at home - done!
+    setGoal(motorIndex, GOAL_IDLE);
+    Serial.print(SCORBOT_REF[motorIndex].name);
+    Serial.print(": Calibration complete. Range: [");
+    Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCCW);
+    Serial.print(" to ");
+    Serial.print(jointState[motorIndex].maxEncoderStepsFromHomeCW);
+    Serial.println("]");
+  }
 }
 
 // ============================================================================
 // GOAL: MOVE_TO (placeholder for future)
 // ============================================================================
 
-void updateGoalMoveTo(int motorIndex) {
+void doGoalMoveTo(int motorIndex) {
   long target = jointState[motorIndex].targetPosition;
   long current = jointState[motorIndex].encoderCount;
   long error = target - current;
@@ -545,8 +594,6 @@ void printDetailedState(int motorIndex) {
   // Progress flags
   Serial.print("Has Found Home: ");
   Serial.println(jointState[motorIndex].hasFoundHome ? "YES" : "NO");
-  Serial.print("Backing Off: ");
-  Serial.println(jointState[motorIndex].backingOff ? "YES" : "NO");
   Serial.print("Searched CCW: ");
   Serial.println(jointState[motorIndex].searchedCCW ? "YES" : "NO");
   Serial.print("Searched CW: ");
@@ -583,16 +630,16 @@ void printActiveGoals() {
 // ============================================================================
 
 
-void moveSelectedMotorCW() {
+void jogSelectedMotorCW() {
   if (selectedMotor < 0) {
     Serial.println("No motor selected");
     return;
   }
 
-  if (!jointState[selectedMotor].hasFoundHome) {
-    Serial.println("Must home first");
-    return;
-  }
+  // if (!jointState[selectedMotor].hasFoundHome) {
+  //   Serial.println("Must home first");
+  //   return;
+  // }
 
   // Check if already at or near CW limit
   if (isCalibrated(selectedMotor)) {
@@ -612,16 +659,16 @@ void moveSelectedMotorCW() {
   Serial.println(jointState[selectedMotor].targetPosition);
 }
 
-void moveSelectedMotorCCW() {
+void jogSelectedMotorCCW() {
   if (selectedMotor < 0) {
     Serial.println("No motor selected");
     return;
   }
 
-  if (!jointState[selectedMotor].hasFoundHome) {
-    Serial.println("Must home first");
-    return;
-  }
+  // if (!jointState[selectedMotor].hasFoundHome) {
+  //   Serial.println("Must home first");
+  //   return;
+  // }
 
   // Check if already at or near CCW limit
   if (isCalibrated(selectedMotor)) {

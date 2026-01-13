@@ -114,8 +114,8 @@ const Scorbot_joints_reference SCORBOT_REF[ScorbotJointIndex_COUNT] = {
 // L298N Board 2, Motor A (Output 1)
 
   [MOTOR_ELBOW] = {
-    .CCW_pin = 26,
-    .CW_pin = 27,
+    .CCW_pin = 27,
+    .CW_pin = 26,
     .pwm_pin = 5,
     .encoder_p0_pin = 38,
     .encoder_p1_pin = 39,
@@ -222,12 +222,9 @@ struct ScorbotJointState {
 
   // Progress flags (minimal, goal-specific)
   bool hasFoundHome;           // Whether home switch has been located
-  bool backingOff;             // During GOAL_FIND_HOME: backing away from switch
   bool searchedCCW;            // During GOAL_FIND_HOME: tried CCW direction
   bool searchedCW;             // During GOAL_FIND_HOME: tried CW direction
-
-  // Homing-specific state
-  long backoffTargetCount;     // Target encoder count for backoff phase
+  int calibrationPhase;        // During GOAL_CALIBRATE_RANGE: 1=CCW limit, 2=CW limit, 3=return home
 
   // Timing and stall detection
   unsigned long lastEncoderCheckTime;     // For stall detection interval
@@ -256,10 +253,9 @@ inline void initializeAllJointStates() {
     jointState[i].maxEncoderStepsFromHomeCW = 0;    // 0 = uncalibrated
     jointState[i].maxEncoderStepsFromHomeCCW = 0;   // 0 = uncalibrated
     jointState[i].hasFoundHome = false;
-    jointState[i].backingOff = false;
     jointState[i].searchedCCW = false;
     jointState[i].searchedCW = false;
-    jointState[i].backoffTargetCount = 0;
+    jointState[i].calibrationPhase = 0;
     jointState[i].lastEncoderCheckTime = 0;
     jointState[i].lastSwitchDebounceTime = 0;
     jointState[i].goalStartTime = 0;
@@ -275,8 +271,7 @@ inline void initializeAllJointStates() {
 
 // Movement speeds
 const int HOMING_SEARCH_SPEED = 200;      // PWM for initial search (0-255)
-const int HOMING_APPROACH_SPEED = 30;     // PWM for final approach
-const int HOMING_BACKOFF_COUNTS = 50;     // Encoder counts to back off
+const int HOMING_APPROACH_SPEED = 100;    // PWM for final approach
 
 // Timeouts
 const unsigned long GOAL_TIMEOUT_MS = 100000;  // Max time for any goal
@@ -423,14 +418,8 @@ inline void updateAllEncoders() {
 inline bool isHomeSwitchPressed(int motorIndex) {
   if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT) return false;
 
-  if (digitalRead(SCORBOT_REF[motorIndex].home_switch_pin) == LOW) {
-    unsigned long currentTime = millis();
-    if (currentTime - jointState[motorIndex].lastSwitchDebounceTime > SWITCH_DEBOUNCE_MS) {
-      jointState[motorIndex].lastSwitchDebounceTime = currentTime;
-      return true;
-    }
-  }
-  return false;
+  // Simply return the current state - switch is active LOW
+  return (digitalRead(SCORBOT_REF[motorIndex].home_switch_pin) == LOW);
 }
 
 // Check for stall condition
@@ -505,11 +494,22 @@ inline void setGoal(int motorIndex, MotorGoal goal) {
   if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT) return;
 
   // Reset goal-specific flags
-  jointState[motorIndex].backingOff = false;
   jointState[motorIndex].searchedCCW = false;
   jointState[motorIndex].searchedCW = false;
   jointState[motorIndex].stallCounter = 0;
   jointState[motorIndex].goalStartTime = millis();
+
+
+//stop motor if goal set to idle. double safety from previous bug
+  if (goal == GOAL_IDLE ) {
+      stopMotor(motorIndex);
+    }
+
+
+  // Reset calibration phase when starting calibration
+  if (goal == GOAL_CALIBRATE_RANGE) {
+    jointState[motorIndex].calibrationPhase = 1;  // Start at phase 1 (CCW limit)
+  }
 
   jointState[motorIndex].currentGoal = goal;
 }
@@ -518,6 +518,10 @@ inline void setGoal(int motorIndex, MotorGoal goal) {
 inline void startHoming(int motorIndex) {
   if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT) return;
   stopMotor(motorIndex);
+  // Reset calibration data for fresh homing sequence
+  jointState[motorIndex].maxEncoderStepsFromHomeCW = 0;
+  jointState[motorIndex].maxEncoderStepsFromHomeCCW = 0;
+  jointState[motorIndex].hasFoundHome = false;
   setGoal(motorIndex, GOAL_FIND_HOME);
 }
 

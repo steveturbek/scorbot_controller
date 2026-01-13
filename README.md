@@ -31,7 +31,7 @@ The goals of the project are to
 
 ## TODO
 
-- [] make 'home' the CW clockwise side of the microswitch. ~200 encoder steps from one side to the other.
+- [] make 'home' the CW clockwise side of the microswitch. there are ~200 encoder steps where the switch is depressed as the arm moves across the button.
 - [] add 'middle' command to move joint to centerpoint of movement, so plastic cam cover can be moved there
 - [] gripper home needs to be explored / defined
 - [] wrist pitch and roll movements depend on motors 4-5 working together differential drive
