@@ -146,26 +146,7 @@ const int JOG_STEP_SIZE = 100;
 // MOTOR CONTROL FUNCTIONS
 // ============================================================================
 
-// Configure all pins for a single motor
-// Usage: setupMotor(MOTOR_BASE);
-inline void setupMotor(int ScorbotJointIndex) {
-  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT) return;
 
-  pinMode(SCORBOT_REF[ScorbotJointIndex].CCW_pin, OUTPUT);
-  pinMode(SCORBOT_REF[ScorbotJointIndex].CW_pin, OUTPUT);
-  pinMode(SCORBOT_REF[ScorbotJointIndex].pwm_pin, OUTPUT);
-  pinMode(SCORBOT_REF[ScorbotJointIndex].encoder_p0_pin, INPUT_PULLUP);
-  pinMode(SCORBOT_REF[ScorbotJointIndex].encoder_p1_pin, INPUT_PULLUP);
-  pinMode(SCORBOT_REF[ScorbotJointIndex].home_switch_pin, INPUT_PULLUP);
-}
-// ============================================================================
-// Configure all 6 motors at once
-// Usage: setupAllMotors();
-inline void setupAllMotors() {
-  for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
-    setupMotor(i);
-  }
-}
 // ============================================================================
 // Stop a motor
 // Usage: stopMotor(MOTOR_BASE);

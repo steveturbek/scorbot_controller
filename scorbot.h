@@ -181,4 +181,31 @@ const Scorbot_joints_reference SCORBOT_REF[ScorbotJointIndex_COUNT] = {
 
 
 
+
+// ============================================================================
+// MOTOR CONTROL FUNCTIONS
+// ============================================================================
+
+
+// Configure all pins for a single motor
+// Usage: setupMotor(MOTOR_BASE);
+inline void setupMotorPins(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT) return;
+
+  pinMode(SCORBOT_REF[ScorbotJointIndex].CCW_pin, OUTPUT);
+  pinMode(SCORBOT_REF[ScorbotJointIndex].CW_pin, OUTPUT);
+  pinMode(SCORBOT_REF[ScorbotJointIndex].pwm_pin, OUTPUT);
+  pinMode(SCORBOT_REF[ScorbotJointIndex].encoder_p0_pin, INPUT_PULLUP);
+  pinMode(SCORBOT_REF[ScorbotJointIndex].encoder_p1_pin, INPUT_PULLUP);
+  pinMode(SCORBOT_REF[ScorbotJointIndex].home_switch_pin, INPUT_PULLUP);
+}
+// ============================================================================
+// Configure all 6 motors at once
+inline void setupAllMotorPins() {
+  for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
+    setupMotorPins(i);
+  }
+}
+
+
 #endif // SCORBOT_PINS_H
