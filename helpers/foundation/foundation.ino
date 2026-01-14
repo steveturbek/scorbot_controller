@@ -4,18 +4,6 @@
 
   */
 
-// Goal-based states
-enum MotorGoal {
-  GOAL_IDLE,             // No active goal, motor at rest
-  GOAL_FIND_HOME,        // Find home switch and set position to 0
-  GOAL_CALIBRATE_RANGE,  // Find CW and CCW limits from home
-  GOAL_MOVE_TO,          // Move to target encoder position
-  GOAL_FAULT             // Error condition, requires reset
-};
-
-// Goal names for debugging
-const char* MOTOR_GOAL_NAMES[] = {"IDLE", "FIND_HOME", "CALIBRATE_RANGE", "MOVE_TO", "FAULT"};
-
 #include <Arduino.h>
 
 #include "/Users/steveturbek/Documents/scorbot_controller/scorbot_controller/scorbot.h"
@@ -31,32 +19,88 @@ CW for wrist roll is normal human wrist direction
 
 */
 
+// Goal-based states
+enum JointGoal {
+  GOAL_IDLE,                 // No active goal, motor at rest
+  GOAL_FIND_HOME,            // Find home switch and set position to 0
+  GOAL_CALIBRATE_RANGE_CW,   // Find CW limits from home
+  GOAL_CALIBRATE_RANGE_CCW,  // Find CCW limits from home
+  GOAL_MOVE_TO,              // Move to target encoder position
+  GOAL_FAULT                 // Error condition, requires reset
+};
+
+// Goal names for debugging
+const char* MOTOR_GOAL_NAMES[] = {"IDLE", "FIND_HOME", "CALIBRATE_RANGE", "MOVE_TO", "FAULT"};
+
 struct ScorbotJointState {
+  bool hasFoundHome;  // Whether home switch has been located
+
+  // Motor control
+  int motorSpeed;  // value (-99 for CCW speed, 0 for stop and 99 for CW)
+  // will be interpreted using the min numbers for the individual motor
+
+  JointGoal currentGoal;        // Current goal being pursued
+  unsigned long goalStartTime;  // When current goal started
+
+  long targetEncoderCountToMoveTo;           // Target encoder count (for GOAL_MOVE_TO)
+  long maxEncoderStepsFromHomeCW;            // CW limit from home.   (0 = uncalibrated)
+  long maxEncoderStepsFromHomeCCW;           // CCW limit from home (0 = uncalibrated)
+  unsigned long lastHomeSwitchDebounceTime;  // For home switch debouncing
+
   // Encoder tracking
   long encoderCount;      // Current encoder position
   long lastEncoderCount;  // Previous count for stall detection
   int lastEncoded;        // Last 2-bit encoder state (for quadrature)
 
-  // Motor control
-  int motorPWM;  // Current PWM value (-255 for CCW speed, 0 for stop and 255 for CW)
-
-  // Goal-based state
-  MotorGoal currentGoal;  // Current goal being pursued
-  long targetPosition;    // Target encoder count (for GOAL_MOVE_TO)
-
-  // Calibration data (0 = uncalibrated)
-  long maxEncoderStepsFromHomeCW;   // CW limit from home
-  long maxEncoderStepsFromHomeCCW;  // CCW limit from home
-
   // Timing and stall detection
-  unsigned long lastEncoderCheckTime;    // For stall detection interval
-  unsigned long lastSwitchDebounceTime;  // For switch debouncing
-  unsigned long goalStartTime;           // When current goal started
-  int stallCounter;                      // Consecutive stall checks
+  unsigned long lastEncoderCheckTime;  // For stall detection interval
+  int stallCounter;                    // Consecutive stall checks
 };
 
 // Array of states, one per motor (initialize with zeros)
 ScorbotJointState jointState[ScorbotJointIndex_COUNT];
+
+// ============================================================================
+// DEBUG HELPERS
+// ============================================================================
+
+void printJointState(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
+
+  ScorbotJointState* s = &jointState[ScorbotJointIndex];
+
+  Serial.println("==== Joint State ====");
+  Serial.print("Motor: ");
+  Serial.println(SCORBOT_REF[ScorbotJointIndex].name);
+  Serial.print("hasFoundHome: ");
+  Serial.println(s->hasFoundHome);
+  Serial.print("motorSpeed: ");
+  Serial.println(s->motorSpeed);
+  Serial.print("currentGoal: ");
+  Serial.println(MOTOR_GOAL_NAMES[s->currentGoal]);
+  Serial.print("goalStartTime: ");
+  Serial.println(s->goalStartTime);
+  Serial.print("targetEncoderCountToMoveTo: ");
+  Serial.println(s->targetEncoderCountToMoveTo);
+  Serial.print("maxEncoderStepsFromHomeCW: ");
+  Serial.println(s->maxEncoderStepsFromHomeCW);
+  Serial.print("maxEncoderStepsFromHomeCCW: ");
+  Serial.println(s->maxEncoderStepsFromHomeCCW);
+  Serial.print("lastHomeSwitchDebounceTime: ");
+  Serial.println(s->lastHomeSwitchDebounceTime);
+  Serial.print("encoderCount: ");
+  Serial.println(s->encoderCount);
+  Serial.print("lastEncoderCount: ");
+  Serial.println(s->lastEncoderCount);
+  Serial.print("lastEncoded: ");
+  Serial.println(s->lastEncoded);
+  Serial.print("lastEncoderCheckTime: ");
+  Serial.println(s->lastEncoderCheckTime);
+  Serial.print("stallCounter: ");
+  Serial.println(s->stallCounter);
+  Serial.println("====================");
+}
 
 // ============================================================================
 // STATE INITIALIZATION
@@ -64,21 +108,23 @@ ScorbotJointState jointState[ScorbotJointIndex_COUNT];
 
 inline void initializeAllJointStates() {
   for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
+    jointState[i].hasFoundHome = false;
+
+    jointState[i].motorSpeed = 0;
+
+    jointState[i].currentGoal = GOAL_IDLE;
+    jointState[i].goalStartTime = 0;
+
+    jointState[i].targetEncoderCountToMoveTo = 0;
+    jointState[i].maxEncoderStepsFromHomeCW = 0;   // 0 = uncalibrated
+    jointState[i].maxEncoderStepsFromHomeCCW = 0;  // 0 = uncalibrated
+    jointState[i].lastHomeSwitchDebounceTime = 0;
+
     jointState[i].encoderCount = 0;
     jointState[i].lastEncoderCount = 0;
     jointState[i].lastEncoded = 0;
 
-    jointState[i].motorPWM = 0;
-
-    jointState[i].currentGoal = GOAL_IDLE;
-    jointState[i].targetPosition = 0;
-
-    jointState[i].maxEncoderStepsFromHomeCW = 0;   // 0 = uncalibrated
-    jointState[i].maxEncoderStepsFromHomeCCW = 0;  // 0 = uncalibrated
-
     jointState[i].lastEncoderCheckTime = 0;
-    jointState[i].lastSwitchDebounceTime = 0;
-    jointState[i].goalStartTime = 0;
     jointState[i].stallCounter = 0;
   }
 }
@@ -93,7 +139,7 @@ void setup() {
     ;
   }
 
-  Serial.println("\n===========SCORBOT START================");
+  Serial.println("\n SCORBOT START ===========================");
 
   // Initialize hardware
   setupAllMotorPins();
@@ -108,6 +154,10 @@ void setup() {
   for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
     jointState[i].lastEncoderCheckTime = millis();
   }
+
+  // start goal base motor find home
+  setGoal(0, GOAL_FIND_HOME);
+  setGoal(1, GOAL_FIND_HOME);
 }
 
 // ============================================================================
@@ -118,6 +168,8 @@ void loop() {
   updateAllEncoders();  // CRITICAL: Update all encoders every loop
 
   checkAllStalls();
+
+  checkAllHomeSwitches();
 
   // Update all active goals
   doAllGoals();
@@ -131,48 +183,92 @@ void loop() {
 
 // ============================================================================
 // GOAL UPDATE DISPATCHER
-// ============================================================================
 
+// Set goal for specific motor
+inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
+
+  // Reset goal-specific flags
+  jointState[ScorbotJointIndex].goalStartTime = millis();
+  resetStallDetection(ScorbotJointIndex);
+
+  switch (goal) {
+    case GOAL_FIND_HOME:
+      jointState[ScorbotJointIndex].hasFoundHome = false;
+      setMotor(ScorbotJointIndex, 80);  // go clockwise
+      break;
+
+      // case GOAL_GO_HOME:
+      // doGoalGoHome(ScorbotJointIndex);
+      //   break;
+
+      // case GOAL_CALIBRATE_RANGE_CCW:
+      //   doGoalCalibrateRange_CCW(ScorbotJointIndex);
+      //   break;
+
+      // case GOAL_MOVE_TO:
+      //   doGoalMoveTo(ScorbotJointIndex);
+      //   break;
+
+    case GOAL_IDLE:
+      stopMotor(
+          ScorbotJointIndex);  // stop motor if goal set to idle. double safety from previous bug
+    case GOAL_FAULT:
+      // Nothing to do
+      break;
+  }
+  // save the Goal
+  jointState[ScorbotJointIndex].currentGoal = goal;
+}
+
+// ------------------------------------------------------------------------
 // Update all active goals
 void doAllGoals() {
-  for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
-    if (jointState[i].currentGoal != GOAL_IDLE && jointState[i].currentGoal != GOAL_FAULT) {
-      doGoal(i);
+  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT;
+       ScorbotJointIndex++) {
+    if (jointState[ScorbotJointIndex].currentGoal != GOAL_IDLE &&
+        jointState[ScorbotJointIndex].currentGoal != GOAL_FAULT) {
+      doGoal(ScorbotJointIndex);
     }
   }
 }
 
-void doGoal(int motorIndex) {
-  if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT)
+void doGoal(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
     return;
 
-  MotorGoal goal = jointState[motorIndex].currentGoal;
+  JointGoal goal = jointState[ScorbotJointIndex].currentGoal;
 
   // Timeouts
   const unsigned long GOAL_TIMEOUT_MS = 100000;  // Max time for any goal
 
   // Timeout check
   if (goal != GOAL_IDLE && goal != GOAL_FAULT) {
-    if (millis() - jointState[motorIndex].goalStartTime > GOAL_TIMEOUT_MS) {
+    if (millis() - jointState[ScorbotJointIndex].goalStartTime > GOAL_TIMEOUT_MS) {
       Serial.print("TIMEOUT: ");
-      Serial.println(SCORBOT_REF[motorIndex].name);
-      stopMotor(motorIndex);
-      setGoal(motorIndex, GOAL_FAULT);
+      Serial.println(SCORBOT_REF[ScorbotJointIndex].name);
+      stopMotor(ScorbotJointIndex);
+      setGoal(ScorbotJointIndex, GOAL_FAULT);
       return;
     }
   }
 
   switch (goal) {
     case GOAL_FIND_HOME:
-      doGoalFindHome(motorIndex);
+      doGoalFindHome(ScorbotJointIndex);
+      break;
+
+      // case GOAL_GO_HOME:
+      // doGoalGoHome(ScorbotJointIndex);
       //   break;
 
-      // case GOAL_CALIBRATE_RANGE:
-      //   doGoalCalibrateRange(motorIndex);
+      // case GOAL_CALIBRATE_RANGE_CCW:
+      //   doGoalCalibrateRange_CCW(ScorbotJointIndex);
       //   break;
 
       // case GOAL_MOVE_TO:
-      //   doGoalMoveTo(motorIndex);
+      //   doGoalMoveTo(ScorbotJointIndex);
       //   break;
 
     case GOAL_IDLE:
@@ -182,40 +278,101 @@ void doGoal(int motorIndex) {
   }
 }
 
-// Set goal for specific motor
-inline void setGoal(int motorIndex, MotorGoal goal) {
-  if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT)
+// ------------------------------------------------------------------------
+void doGoalFindHome(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
     return;
 
-  // Reset goal-specific flags
-  jointState[motorIndex].stallCounter = 0;
-  jointState[motorIndex].goalStartTime = millis();
+  // Allow motor startup time before checking motorSpeed (avoid false error on first loop)
+  unsigned long timeSinceGoalStart = millis() - jointState[ScorbotJointIndex].goalStartTime;
 
-  // stop motor if goal set to idle. double safety from previous bug
-  if (goal == GOAL_IDLE) {
-    stopMotor(motorIndex);
+  if (jointState[ScorbotJointIndex].currentGoal != GOAL_FIND_HOME ||
+      (jointState[ScorbotJointIndex].motorSpeed == 0 && timeSinceGoalStart > 50)) {
+    Serial.println("ERROR in doGoalFindHome(); currentGoal or motorSpeed ");
+    setGoal(ScorbotJointIndex, GOAL_FAULT);
+    return;
   }
 
-  jointState[motorIndex].currentGoal = goal;
+  // Check if we JUST crossed a home edge recently
+  unsigned long MillisSinceProgramStart = millis();
+  unsigned long timeSinceLastEdge =
+      MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime;
+
+  // Success conditions: we found home AND it was recent (within last 100ms)
+  if (jointState[ScorbotJointIndex].hasFoundHome && timeSinceLastEdge < 100) {
+    // We just crossed home edge! Encoder is now at 0
+
+    stopMotor(ScorbotJointIndex);
+    setGoal(ScorbotJointIndex, GOAL_IDLE);
+
+    // printJointState(ScorbotJointIndex);  // debug function
+
+    Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+    Serial.println(": Home found!");
+    return;
+  }
+
+  // Otherwise, keep searching
+  // Motor is already moving (started in setGoal)
+  // Stall detection will reverse direction if needed
 }
 
 // ============================================================================
-// GOAL: FIND_HOME
+// MOTOR CONTROL FUNCTIONS
 // ============================================================================
 
-void doGoalFindHome(int motorIndex) {}
-
-// ============================================================================
-// Stop a motor
-// Usage: stopMotor(MOTOR_BASE);
-inline void stopMotor(int motorIndex) {
-  if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT)
+// Reset stall detection state - call when starting motor or changing direction
+inline void resetStallDetection(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
     return;
 
-  digitalWrite(SCORBOT_REF[motorIndex].CCW_pin, LOW);
-  digitalWrite(SCORBOT_REF[motorIndex].CW_pin, LOW);
-  analogWrite(SCORBOT_REF[motorIndex].pwm_pin, 0);
-  jointState[motorIndex].motorPWM = 0;
+  jointState[ScorbotJointIndex].stallCounter = 0;
+  jointState[ScorbotJointIndex].lastEncoderCount = jointState[ScorbotJointIndex].encoderCount;
+  jointState[ScorbotJointIndex].lastEncoderCheckTime = millis();
+}
+
+inline void setMotor(int ScorbotJointIndex, int speed) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
+  if (speed < -99 || speed > 99)
+    return;
+
+  // motor has different minimum values depending on direction, from weight of arm
+  int motor_min = 0;
+  int pwmValue = 0;
+
+  if (speed > 0) {  // clockwise
+    motor_min = SCORBOT_REF[ScorbotJointIndex].motor_min_CW;
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, HIGH);
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, LOW);
+  } else if (speed < 0) {  // counter clockwise
+    motor_min = SCORBOT_REF[ScorbotJointIndex].motor_min_CCW;
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, HIGH);
+  } else {  // stop
+    stopMotor(ScorbotJointIndex);
+    return;
+  }
+
+  jointState[ScorbotJointIndex].motorSpeed = speed;
+
+  // Remap speed 1-99 to motor_min-255
+  pwmValue = map(abs(speed), 0, 99, motor_min, 255);
+
+  analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, pwmValue);
+}
+
+// ------------------------------------------------------------------------
+// Stop a motor
+// Usage: stopMotor(MOTOR_BASE);
+inline void stopMotor(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
+
+  digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, LOW);
+  digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
+  analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, 0);
+  jointState[ScorbotJointIndex].motorSpeed = 0;
 }
 
 // ============================================================================
@@ -223,24 +380,29 @@ inline void stopMotor(int motorIndex) {
 // ============================================================================
 
 // Update encoder for specific motor (polled quadrature decoding)
-inline void updateEncoder(int motorIndex) {
-  if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT)
+inline void updateEncoder(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
     return;
 
-  int MSB = digitalRead(SCORBOT_REF[motorIndex].encoder_p0_pin);
-  int LSB = digitalRead(SCORBOT_REF[motorIndex].encoder_p1_pin);
+  // Read current state of both encoder pins
+  int MSB = digitalRead(SCORBOT_REF[ScorbotJointIndex].encoder_p0_pin);
+  int LSB = digitalRead(SCORBOT_REF[ScorbotJointIndex].encoder_p1_pin);
 
+  // Combine pins into 2-bit value (00, 01, 10, or 11)
   int encoded = (MSB << 1) | LSB;
-  int sum = (jointState[motorIndex].lastEncoded << 2) | encoded;
 
-  // Quadrature decoding
+  // Create 4-bit value from previous state and current state for transition lookup
+  int sum = (jointState[ScorbotJointIndex].lastEncoded << 2) | encoded;
+
+  // Quadrature decoding: check transition patterns to determine direction
   if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011) {
-    jointState[motorIndex].encoderCount++;
+    jointState[ScorbotJointIndex].encoderCount++;  // Clockwise rotation
   } else if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000) {
-    jointState[motorIndex].encoderCount--;
+    jointState[ScorbotJointIndex].encoderCount--;  // Counter-clockwise rotation
   }
 
-  jointState[motorIndex].lastEncoded = encoded;
+  // Store current state for next comparison
+  jointState[ScorbotJointIndex].lastEncoded = encoded;
 }
 
 // Update all encoders
@@ -250,60 +412,161 @@ inline void updateAllEncoders() {
   }
 }
 
-// ============================================================================
+// ------------------------------------------------------------------------
 // STALL
-// ============================================================================
 
-inline bool checkStall(int motorIndex) {
-  if (motorIndex < 0 || motorIndex >= ScorbotJointIndex_COUNT)
+inline bool checkStall(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
     return false;
-  if (jointState[motorIndex].motorPWM == 0)
+  if (jointState[ScorbotJointIndex].motorSpeed == 0)
     return false;
 
   const unsigned long STALL_CHECK_INTERVAL_MS = 50;  // how often to check
 
-  unsigned long currentTime = millis();
+  unsigned long MillisSinceProgramStart = millis();
 
-  if (currentTime - jointState[motorIndex].lastEncoderCheckTime < STALL_CHECK_INTERVAL_MS) {
+  if (MillisSinceProgramStart - jointState[ScorbotJointIndex].lastEncoderCheckTime <
+      STALL_CHECK_INTERVAL_MS) {
     return false;
   }  // not enough time to determine stall yet
 
   const unsigned long STALL_THRESHOLD_MS = 100;  // Time without motion = stall
   const int STALL_MIN_ENCODER_CHANGE = 2;        // Min counts in interval
 
-  long currentCount = jointState[motorIndex].encoderCount;
-  long encoderChange = abs(currentCount - jointState[motorIndex].lastEncoderCount);
+  long currentCount = jointState[ScorbotJointIndex].encoderCount;
+  long encoderChange = abs(currentCount - jointState[ScorbotJointIndex].lastEncoderCount);
 
   // Check if motor isn't moving enough (potential stall)
   if (encoderChange < STALL_MIN_ENCODER_CHANGE) {
-    jointState[motorIndex].stallCounter++;  // Increment consecutive stall detections
+    jointState[ScorbotJointIndex].stallCounter++;  // Increment consecutive stall detections
 
     // If stalled for long enough, report stall
-    if (jointState[motorIndex].stallCounter * STALL_CHECK_INTERVAL_MS >= STALL_THRESHOLD_MS) {
-      jointState[motorIndex].stallCounter = 0;  // Reset for next stall detection
-      return true;                              // STALL DETECTED
+    if (jointState[ScorbotJointIndex].stallCounter * STALL_CHECK_INTERVAL_MS >=
+        STALL_THRESHOLD_MS) {
+      jointState[ScorbotJointIndex].stallCounter = 0;  // Reset for next stall detection
+      return true;                                     // STALL DETECTED
     }
   } else {
-    jointState[motorIndex].stallCounter = 0;  // Motor moving, reset counter
+    jointState[ScorbotJointIndex].stallCounter = 0;  // Motor moving, reset counter
   }
 
-  jointState[motorIndex].lastEncoderCount = currentCount;
-  jointState[motorIndex].lastEncoderCheckTime = currentTime;
+  jointState[ScorbotJointIndex].lastEncoderCount = currentCount;
+  jointState[ScorbotJointIndex].lastEncoderCheckTime = MillisSinceProgramStart;
+
+  return false;
+}
+// ------------------------------------------------------------------------
+inline void checkAllStalls() {
+  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT;
+       ScorbotJointIndex++) {
+    if (checkStall(ScorbotJointIndex)) {
+      // deal with the stall with business logic
+      // Serial.println("STALL");
+      if (jointState[ScorbotJointIndex].currentGoal == GOAL_FIND_HOME) {
+        if (jointState[ScorbotJointIndex].motorSpeed > 0) {
+          // stalled when moving clockwise, we don't know which side, if either, it is stalled at,
+          // so assume at end of CW rotation
+          Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+          Serial.println(": stalled going clockwise, reversing");
+
+          int reversedSpeed = jointState[ScorbotJointIndex].motorSpeed * -1;
+          // stopMotor(ScorbotJointIndex);
+          // delay(100);
+          setMotor(ScorbotJointIndex, reversedSpeed);
+          resetStallDetection(ScorbotJointIndex);
+
+        } else if (jointState[ScorbotJointIndex].motorSpeed < 0) {
+          // stalled when moving clockwise, we don't know which side, if either, it is stalled at,
+          // so assume at end of CW rotation
+
+          Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+          Serial.println(": stalled going counter clockwise, reversing");
+
+          int reversedSpeed = jointState[ScorbotJointIndex].motorSpeed * -1;
+          // stopMotor(ScorbotJointIndex);
+          // delay(100);
+          setMotor(ScorbotJointIndex, reversedSpeed);
+          resetStallDetection(ScorbotJointIndex);
+        } else {
+          // motor is idle, something is weird, set goal to IDLE
+          jointState[ScorbotJointIndex].currentGoal = GOAL_IDLE;
+        }
+      }
+    }
+  }
+  return;
+}
+// ============================================================================
+// Home Switches
+// ============================================================================
+
+// Check if home switch pressed
+inline bool isHomeSwitchPressed(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return false;
+
+  // Simply return the current state - switch is active LOW
+  return (digitalRead(SCORBOT_REF[ScorbotJointIndex].home_switch_pin) == LOW);
+}
+
+// ------------------------------------------------------------------------
+inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return false;
+
+  unsigned long MillisSinceProgramStart = millis();
+  const unsigned long SWITCH_DEBOUNCE_MS = 10;  // Switch debounce time
+
+  // jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime is last time the switch was pressed
+  if (MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime <
+      SWITCH_DEBOUNCE_MS)
+    return false;  // ignore to debounce
+
+  // Simply return the current state - switch is active LOW
+  if (isHomeSwitchPressed(ScorbotJointIndex)) {
+    // we are really on the switch
+
+    if (jointState[ScorbotJointIndex].motorSpeed > 0) {
+      Serial.println("hit switch going clockwise, reset home position");
+      // if going clockwise, reset home position
+      jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
+      jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
+      jointState[ScorbotJointIndex].hasFoundHome = true;
+      return true;
+
+    } else {
+      jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime =
+          MillisSinceProgramStart;  // hit switch going CCW,
+      return false;  // if stopped or going counter clockwise, ignore till we fall off the switch
+    }
+  } else {  // switch is low
+
+    if (jointState[ScorbotJointIndex].motorSpeed < 0 &&
+        jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime != 0 &&
+        MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime >
+            SWITCH_DEBOUNCE_MS * 10) {
+      // if going counter clockwise, reset home position
+      // just rotated off the switch
+
+      Serial.println("off switch going counter clockwise, reset home position");
+      // future task: validate how many steps difference from CW rising edge to CCW falling edge
+
+      jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
+      jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
+      jointState[ScorbotJointIndex].hasFoundHome = true;
+      return true;
+    }
+  }
 
   return false;
 }
 
-inline void checkAllStalls() {
-  for (int motorIndex = 0; motorIndex < ScorbotJointIndex_COUNT; motorIndex++) {
-    if (checkStall(motorIndex)) {
-      if (jointState[motorIndex].motorPWM > 0) {
-        Serial.print(SCORBOT_REF[motorIndex].name);
-        Serial.println(": stalled going clockwise, reversing");
-        jointState[motorIndex].motorPWM *= -1;
-      }
-
-      // stopMotor(motorIndex);
-      // delay(100);
+inline void checkAllHomeSwitches() {
+  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT;
+       ScorbotJointIndex++) {
+    if (checkIfHomeSwitchEdge(ScorbotJointIndex)) {
+      // deal with the stall with business logic
     }
   }
+  return;
 }

@@ -55,6 +55,8 @@ The goals of the project are to
   - `helpers/base_motor_test/base_motor_test.ino` is testing for homing and encoders for just the base motor
   - [Scorbot ER-4U][https://www.theoldrobots.com/book45/ER4u_User_Manual.pdf] seems to be essentially the same machine
   - note that Shoulder, Elbow, Wrist Pitch are built in such a way that wrist pitch remains consistent relative as shoulder and elbow move. Moving the shoulder does NOT simply swing the gripper tip relative to the shoulder. Moving the shoulder rotates the elbow to keep the wrist pitch steady. This is cool / confusing. probably needs kinematics
+  - Arduino IDE is pretty slow. VS Code extension for arduino has been deprecated. PlatformIO looks too complicated for this project. Arduino Community Edition might work, but CLI, etc are too complicated at this point
+  - installed CLANG to VSCode to get linting/formatting
 
 - December 2025
 
