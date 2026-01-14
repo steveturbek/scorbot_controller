@@ -55,6 +55,7 @@ struct ScorbotJointState {
   // Timing and stall detection
   unsigned long lastEncoderCheckTime;  // For stall detection interval
   int stallCounter;                    // Consecutive stall checks
+  int totalStallsThisGoal;             // Total stalls since goal started (for fault detection)
 };
 
 // Array of states, one per motor (initialize with zeros)
@@ -99,6 +100,8 @@ void printJointState(int ScorbotJointIndex) {
   Serial.println(s->lastEncoderCheckTime);
   Serial.print("stallCounter: ");
   Serial.println(s->stallCounter);
+  Serial.print("totalStallsThisGoal: ");
+  Serial.println(s->totalStallsThisGoal);
   Serial.println("====================");
 }
 
@@ -126,6 +129,7 @@ inline void initializeAllJointStates() {
 
     jointState[i].lastEncoderCheckTime = 0;
     jointState[i].stallCounter = 0;
+    jointState[i].totalStallsThisGoal = 0;
   }
 }
 
@@ -135,9 +139,7 @@ inline void initializeAllJointStates() {
 
 void setup() {
   Serial.begin(9600);
-  while (!Serial) {
-    ;
-  }
+  delay(500);  // Brief delay to allow Serial to initialize
 
   Serial.println("\n SCORBOT START ===========================");
 
@@ -156,8 +158,12 @@ void setup() {
   }
 
   // start goal base motor find home
-  setGoal(0, GOAL_FIND_HOME);
+  // setGoal(0, GOAL_FIND_HOME);
   setGoal(1, GOAL_FIND_HOME);
+  // setGoal(2, GOAL_FIND_HOME);
+  // setGoal(3, GOAL_FIND_HOME);
+  // setGoal(4, GOAL_FIND_HOME);
+  // setGoal(5, GOAL_FIND_HOME);
 }
 
 // ============================================================================
@@ -192,11 +198,13 @@ inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
   // Reset goal-specific flags
   jointState[ScorbotJointIndex].goalStartTime = millis();
   resetStallDetection(ScorbotJointIndex);
+  jointState[ScorbotJointIndex].totalStallsThisGoal = 0;  // Reset stall count for new goal
 
   switch (goal) {
     case GOAL_FIND_HOME:
       jointState[ScorbotJointIndex].hasFoundHome = false;
-      setMotor(ScorbotJointIndex, 80);  // go clockwise
+      setMotor(ScorbotJointIndex,
+               99);  // % of effective power for that motor, positive is clockwise
       break;
 
       // case GOAL_GO_HOME:
@@ -214,6 +222,7 @@ inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
     case GOAL_IDLE:
       stopMotor(
           ScorbotJointIndex);  // stop motor if goal set to idle. double safety from previous bug
+      break;
     case GOAL_FAULT:
       // Nothing to do
       break;
@@ -360,6 +369,16 @@ inline void setMotor(int ScorbotJointIndex, int speed) {
   pwmValue = map(abs(speed), 0, 99, motor_min, 255);
 
   analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, pwmValue);
+
+  Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  Serial.print(" motor PWM set to ");
+
+  if (speed > 0)
+    Serial.print("+");
+  else
+    Serial.print("-");
+
+  Serial.println(pwmValue);
 }
 
 // ------------------------------------------------------------------------
@@ -430,8 +449,19 @@ inline bool checkStall(int ScorbotJointIndex) {
     return false;
   }  // not enough time to determine stall yet
 
-  const unsigned long STALL_THRESHOLD_MS = 100;  // Time without motion = stall
-  const int STALL_MIN_ENCODER_CHANGE = 2;        // Min counts in interval
+  // Different stall thresholds for problematic joints (elbow and wrist_pitch)
+  unsigned long STALL_THRESHOLD_MS;
+  int STALL_MIN_ENCODER_CHANGE;
+
+  if (ScorbotJointIndex == MOTOR_ELBOW || ScorbotJointIndex == MOTOR_WRIST_PITCH) {
+    // Less sensitive for elbow and wrist_pitch - need longer time to declare stall
+    STALL_THRESHOLD_MS = 400;      // 200ms instead of 100ms (2x more time)
+    STALL_MIN_ENCODER_CHANGE = 1;  // Only need 1 encoder step (instead of 2)
+  } else {
+    // Default for other motors
+    STALL_THRESHOLD_MS = 100;      // Time without motion = stall
+    STALL_MIN_ENCODER_CHANGE = 2;  // Min counts in interval
+  }
 
   long currentCount = jointState[ScorbotJointIndex].encoderCount;
   long encoderChange = abs(currentCount - jointState[ScorbotJointIndex].lastEncoderCount);
@@ -460,8 +490,42 @@ inline void checkAllStalls() {
   for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT;
        ScorbotJointIndex++) {
     if (checkStall(ScorbotJointIndex)) {
+      if (ScorbotJointIndex == 5 && jointState[ScorbotJointIndex].motorSpeed > 0 &&
+          jointState[ScorbotJointIndex].currentGoal ==
+              GOAL_FIND_HOME) {  // gripper, closing is actually a home position
+
+        stopMotor(ScorbotJointIndex);
+        setGoal(ScorbotJointIndex, GOAL_IDLE);
+
+        jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = millis();
+        jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
+        jointState[ScorbotJointIndex].hasFoundHome = true;
+        Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+        Serial.println(": Home found!");
+        return;
+      }
+
+      // Increment total stalls for this goal
+      jointState[ScorbotJointIndex].totalStallsThisGoal++;
+
+      Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+      Serial.print(": STALL #");
+      Serial.println(jointState[ScorbotJointIndex].totalStallsThisGoal);
+
+      // Check if we've stalled too many times - go to FAULT state
+      const int MAX_STALLS_BEFORE_FAULT = 2;
+      if (jointState[ScorbotJointIndex].totalStallsThisGoal >= MAX_STALLS_BEFORE_FAULT) {
+        Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+        Serial.print(": Too many stalls (");
+        Serial.print(jointState[ScorbotJointIndex].totalStallsThisGoal);
+        Serial.println("), entering FAULT state");
+
+        stopMotor(ScorbotJointIndex);
+        setGoal(ScorbotJointIndex, GOAL_FAULT);
+        return;
+      }
+
       // deal with the stall with business logic
-      // Serial.println("STALL");
       if (jointState[ScorbotJointIndex].currentGoal == GOAL_FIND_HOME) {
         if (jointState[ScorbotJointIndex].motorSpeed > 0) {
           // stalled when moving clockwise, we don't know which side, if either, it is stalled at,

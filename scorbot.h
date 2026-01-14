@@ -116,7 +116,7 @@ const Scorbot_joints_reference SCORBOT_REF[ScorbotJointIndex_COUNT] = {
             .encoder_p1_pin = 39,
             .home_switch_pin = 48,
             .name = "elbow",
-            .motor_min_CCW = 200,  // 0-255
+            .motor_min_CCW = 255,  // 0-255
             .motor_min_CW = 255    // 0-255
         },
 
@@ -159,8 +159,8 @@ const Scorbot_joints_reference SCORBOT_REF[ScorbotJointIndex_COUNT] = {
     // ============================================================================
     // L298N Board 3, Motor B (Output 2)
     [MOTOR_GRIPPER] = {
-        .CCW_pin = 32,
-        .CW_pin = 33,
+        .CCW_pin = 33,
+        .CW_pin = 32,
         .pwm_pin = 2,
         .encoder_p0_pin = 44,
         .encoder_p1_pin = 45,
