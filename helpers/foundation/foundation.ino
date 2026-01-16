@@ -158,12 +158,12 @@ void setup() {
   }
 
   // start goal base motor find home
-  // setGoal(0, GOAL_FIND_HOME);
-  setGoal(1, GOAL_FIND_HOME);
-  // setGoal(2, GOAL_FIND_HOME);
-  // setGoal(3, GOAL_FIND_HOME);
-  // setGoal(4, GOAL_FIND_HOME);
-  // setGoal(5, GOAL_FIND_HOME);
+  // setGoal(MOTOR_BASE, GOAL_FIND_HOME);
+  // setGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
+  setGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
+  // setGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
+  // setGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
+  // setGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
 }
 
 // ============================================================================
@@ -203,8 +203,7 @@ inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
   switch (goal) {
     case GOAL_FIND_HOME:
       jointState[ScorbotJointIndex].hasFoundHome = false;
-      setMotor(ScorbotJointIndex,
-               99);  // % of effective power for that motor, positive is clockwise
+      setMotor(ScorbotJointIndex, -99);  // % power for that motor, positive is clockwise
       break;
 
       // case GOAL_GO_HOME:

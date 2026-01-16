@@ -31,11 +31,10 @@ The goals of the project are to
 
 ## TODO
 
-- [] make 'home' the CW clockwise side of the microswitch. there are ~200 encoder steps where the switch is depressed as the arm moves across the button.
-- [] add 'middle' command to move joint to centerpoint of movement, so plastic cam cover can be moved there
-- [] gripper home needs to be explored / defined
+- [x] make 'home' the CW clockwise side of the microswitch. there are ~200 encoder steps where the switch is depressed as the arm moves across the button.
+- [x] gripper home is stall when closed
 - [] wrist pitch and roll movements depend on motors 4-5 working together differential drive
-- [] shoulder find home
+- [x] shoulder find home
 - [x] write arduino code to get arm to move to home position
 - [x] make replacement microswitch cams
 
@@ -57,6 +56,7 @@ The goals of the project are to
   - note that Shoulder, Elbow, Wrist Pitch are built in such a way that wrist pitch remains consistent relative as shoulder and elbow move. Moving the shoulder does NOT simply swing the gripper tip relative to the shoulder. Moving the shoulder rotates the elbow to keep the wrist pitch steady. This is cool / confusing. probably needs kinematics
   - Arduino IDE is pretty slow. VS Code extension for arduino has been deprecated. PlatformIO looks too complicated for this project. Arduino Community Edition might work, but CLI, etc are too complicated at this point
   - installed CLANG to VSCode to get linting/formatting
+  - MOTOR_ELBOW was a big pain, would not go CCW. turned out the CCW pin (arduinio pin 27) was loose
 
 - December 2025
 
@@ -272,7 +272,7 @@ Here is the pin numbers (looking at the male scorbot cable connector pins)
 
 | Project Name                                                                                         | Associated Web Pages                                                                                                                                                                                                                                                                                                                                                        | Brief Description                                                                                                                                                               |
 | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**Scorbot**](https://github.com/amiravni/Scorbot)                                                   | • [My Name is Scorbot](http://www.whatimade.today/my-name-is-scorbot/)<br>• [Scorbot learns to draw"](http://whatimade.today/geekcon-xii-scorbot-learns-to-draw/)                                                                                                                                                                                                           | Arduino MEGA-based controller for Scorbot ER-V with 6-encoder system, custom PCB shield, and Python drawing capabilities. Complete reverse engineering from junkyard condition. |
+| [**Scorbot**](https://github.com/amiravni/Scorbot)                                                   | • [GitHub](https://github.com/amiravni/Scorbot/blob/master/scorbotOldTestCode/ScorbotCmd/ScorbotCmd.ino) <br>[My Name is Scorbot](http://www.whatimade.today/my-name-is-scorbot/)<br> [Scorbot learns to draw"](http://whatimade.today/geekcon-xii-scorbot-learns-to-draw/)                                                                                                 | Arduino MEGA-based controller for Scorbot ER-V with 6-encoder system, custom PCB shield, and Python drawing capabilities. Complete reverse engineering from junkyard condition. |
 | [**robotic-arm**](https://github.com/ethanleep/robotic-arm)                                          | • [Scorbot ER-III Manual](https://usermanual.wiki/Document/Scorbot20ERIII20manual.259237025/help)                                                                                                                                                                                                                                                                           | Custom controller replacement for Scorbot-ER III with serial and hard-coded control modes. Arduino-based system with comprehensive reference documentation.                     |
 | [**Scorbot**](https://github.com/luisp23/Scorbot)                                                    | • [Author's Portfolio](https://www.luispimen.com/)<br>• [CS 287: Advanced Robotics Course](https://people.eecs.berkeley.edu/~pabbeel/cs287-fa19/)                                                                                                                                                                                                                           | Arduino-based joystick controller for Scorbot robotic arm as cost-effective alternative to expensive original controller. Georgia Tech ECE project.                             |
 | [**Scorbot-ER-V-Simulator-Controller**](https://github.com/aamitn/Scorbot-ER-V-Simulator-Controller) | • [Hackster.io Project](https://www.hackster.io/amitnandileo/scorbot-er-v-controller-simulator-design-1a2d6f)<br>• [Arduino Project Hub](https://create.arduino.cc/projecthub/amitnandileo/scorbot-er-v-controller-simulator-design-1a2d6f)<br>• [Author's Website](https://aamitn.github.io/)<br>• [ResearchGate Profile](https://www.researchgate.net/profile/Amit-Nandi) | Professional-grade MATLAB simulation software and hardware controller for Scorbot ER-V+ with PID control, ROS integration, and industrial safety features.                      |
