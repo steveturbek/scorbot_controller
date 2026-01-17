@@ -62,6 +62,12 @@ struct ScorbotJointState {
 ScorbotJointState jointState[ScorbotJointIndex_COUNT];
 
 // ============================================================================
+// FORWARD DECLARATIONS
+// ============================================================================
+void setMotor(int ScorbotJointIndex, int speed, bool isDifferentialActive = true);
+void stopMotor(int ScorbotJointIndex, bool isDifferentialActive = true);
+
+// ============================================================================
 // DEBUG HELPERS
 // ============================================================================
 
@@ -140,6 +146,10 @@ inline void initializeAllJointStates() {
 void setup() {
   Serial.begin(9600);
   delay(500);  // Brief delay to allow Serial to initialize
+  // Clear any garbage data in the buffer
+  while (Serial.available() > 0) {
+    Serial.read();
+  }
 
   Serial.println("\n SCORBOT START ===========================");
 
@@ -149,7 +159,7 @@ void setup() {
 
   // Safety: stop all motors
   for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
-    stopMotor(i);
+    // stopMotor(i);
   }
 
   // Initialize encoder check time
@@ -160,10 +170,38 @@ void setup() {
   // start goal base motor find home
   // setGoal(MOTOR_BASE, GOAL_FIND_HOME);
   // setGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
-  setGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
-  // setGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
+  // setGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
+  setGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
   // setGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
   // setGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
+
+  // Manual differential test code (replaced by automatic differential system)
+  // analogWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].pwm_pin, 255);
+  // analogWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].pwm_pin, 255);
+
+  // // makes wrist pitch up only
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
+
+  // //  wrist pitch down,
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
+
+  // wrist pitch nothing , slow clockwise roll
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
+
+  // wrist pitch nothing  counter clockwise roll
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
+  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
 }
 
 // ============================================================================
@@ -200,10 +238,21 @@ inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
   resetStallDetection(ScorbotJointIndex);
   jointState[ScorbotJointIndex].totalStallsThisGoal = 0;  // Reset stall count for new goal
 
+  // Reset wrist motor speeds when entering homing mode
+  if (goal == GOAL_FIND_HOME &&
+      (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL)) {
+    jointState[MOTOR_WRIST_PITCH].motorSpeed = 0;
+    jointState[MOTOR_WRIST_ROLL].motorSpeed = 0;
+  }
+
+  // CRITICAL: Set the goal BEFORE executing motor commands
+  // This ensures bypass checks see the correct goal state
+  jointState[ScorbotJointIndex].currentGoal = goal;
+
   switch (goal) {
     case GOAL_FIND_HOME:
       jointState[ScorbotJointIndex].hasFoundHome = false;
-      setMotor(ScorbotJointIndex, -99);  // % power for that motor, positive is clockwise
+      setMotor(ScorbotJointIndex, 80);  // % power for that motor, positive is clockwise
       break;
 
       // case GOAL_GO_HOME:
@@ -226,8 +275,6 @@ inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
       // Nothing to do
       break;
   }
-  // save the Goal
-  jointState[ScorbotJointIndex].currentGoal = goal;
 }
 
 // ------------------------------------------------------------------------
@@ -241,7 +288,7 @@ void doAllGoals() {
     }
   }
 }
-
+// ------------------------------------------------------------------------
 void doGoal(int ScorbotJointIndex) {
   if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
     return;
@@ -326,26 +373,103 @@ void doGoalFindHome(int ScorbotJointIndex) {
 }
 
 // ============================================================================
+// DIFFERENTIAL DRIVE HELPERS
+// ============================================================================
+
+// Calculate physical motor speeds from abstract wrist joint speeds
+// Returns true if no saturation occurred
+inline bool calculateDifferentialMotorSpeeds(int pitchSpeed, int rollSpeed, int* motor4Speed,
+                                             int* motor5Speed) {
+  // Differential math based on mechanical coupling
+  // Same direction = pitch, Opposite direction = roll
+  int raw_motor4 = pitchSpeed - rollSpeed;  // Pitch motor (physical motor 4)
+  int raw_motor5 = pitchSpeed + rollSpeed;  // Roll motor (physical motor 5)
+
+  bool saturated = false;
+
+  // Check for saturation (exceeds -99 to +99 range)
+  if (raw_motor4 > 99 || raw_motor4 < -99 || raw_motor5 > 99 || raw_motor5 < -99) {
+    saturated = true;
+
+    // Proportional scaling to maintain motion ratio
+    int maxAbsValue = max(abs(raw_motor4), abs(raw_motor5));
+    if (maxAbsValue > 99) {
+      float scaleFactor = 99.0 / maxAbsValue;
+      raw_motor4 = (int)(raw_motor4 * scaleFactor);
+      raw_motor5 = (int)(raw_motor5 * scaleFactor);
+    }
+  }
+
+  // Clamp to valid range (safety)
+  *motor4Speed = constrain(raw_motor4, -99, 99);
+  *motor5Speed = constrain(raw_motor5, -99, 99);
+
+  return !saturated;
+}
+
+// ============================================================================
 // MOTOR CONTROL FUNCTIONS
 // ============================================================================
 
-// Reset stall detection state - call when starting motor or changing direction
-inline void resetStallDetection(int ScorbotJointIndex) {
-  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
-    return;
+// ------------------------------------------------------------------------
 
-  jointState[ScorbotJointIndex].stallCounter = 0;
-  jointState[ScorbotJointIndex].lastEncoderCount = jointState[ScorbotJointIndex].encoderCount;
-  jointState[ScorbotJointIndex].lastEncoderCheckTime = millis();
-}
-
-inline void setMotor(int ScorbotJointIndex, int speed) {
+inline void setMotor(int ScorbotJointIndex, int speed, bool isDifferentialActive = true) {
   if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
     return;
   if (speed < -99 || speed > 99)
     return;
 
-  // motor has different minimum values depending on direction, from weight of arm
+  // Store the abstract/logical speed in jointState
+  jointState[ScorbotJointIndex].motorSpeed = speed;
+
+  Serial.print("setMotor ");
+  Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  Serial.print(", ");
+  Serial.println(speed);
+
+  // DIFFERENTIAL DRIVE FOR WRIST
+  // For wrist pitch/roll, differential control is needed because the physical
+  // motors are coupled - moving one motor alone produces combined pitch+roll
+  // motion. The differential math produces pure pitch or pure roll motion.
+  if (isDifferentialActive &&
+      (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL)) {
+    // Apply differential motor commands to both physical motors
+    // Reads abstract speeds from jointState and calculates physical motor outputs
+    int motor4Speed, motor5Speed;
+
+    calculateDifferentialMotorSpeeds(jointState[MOTOR_WRIST_PITCH].motorSpeed,
+                                     jointState[MOTOR_WRIST_ROLL].motorSpeed, &motor4Speed,
+                                     &motor5Speed);
+
+    // Apply to physical motors using direct control (bypasses differential logic)
+    setMotorDirect(MOTOR_WRIST_PITCH, motor4Speed);
+    setMotorDirect(MOTOR_WRIST_ROLL, motor5Speed);
+
+    return;
+  }
+
+  // NORMAL (NON-DIFFERENTIAL) MOTOR CONTROL
+  setMotorDirect(ScorbotJointIndex, speed);
+}
+
+// ------------------------------------------------------------------------
+// Direct motor control - sets physical motor without differential interception
+// Used internally by differential system to avoid recursion
+inline void setMotorDirect(int ScorbotJointIndex, int speed) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
+  if (speed < -99 || speed > 99)
+    return;
+
+  // Debug output for wrist motors
+  if (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL) {
+    Serial.print("setMotor Direct ");
+    Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+    Serial.print(", ");
+    Serial.print(speed);
+    Serial.println();
+  }
+
   int motor_min = 0;
   int pwmValue = 0;
 
@@ -358,39 +482,26 @@ inline void setMotor(int ScorbotJointIndex, int speed) {
     digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
     digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, HIGH);
   } else {  // stop
-    stopMotor(ScorbotJointIndex);
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, LOW);
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
+    analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, 0);
+    // Don't modify jointState.motorSpeed here - that's the logical speed managed by setMotor()
     return;
   }
 
-  jointState[ScorbotJointIndex].motorSpeed = speed;
-
-  // Remap speed 1-99 to motor_min-255
+  // Don't modify jointState.motorSpeed here - that's the logical speed managed by setMotor()
   pwmValue = map(abs(speed), 0, 99, motor_min, 255);
-
   analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, pwmValue);
-
-  Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-  Serial.print(" motor PWM set to ");
-
-  if (speed > 0)
-    Serial.print("+");
-  else
-    Serial.print("-");
-
-  Serial.println(pwmValue);
 }
 
 // ------------------------------------------------------------------------
 // Stop a motor
 // Usage: stopMotor(MOTOR_BASE);
-inline void stopMotor(int ScorbotJointIndex) {
-  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
-    return;
+inline void stopMotor(int ScorbotJointIndex, bool isDifferentialActive = true) {
+  Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  Serial.println("stopMotor");
 
-  digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, LOW);
-  digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
-  analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, 0);
-  jointState[ScorbotJointIndex].motorSpeed = 0;
+  setMotor(ScorbotJointIndex, 0, isDifferentialActive);
 }
 
 // ============================================================================
@@ -432,12 +543,26 @@ inline void updateAllEncoders() {
 
 // ------------------------------------------------------------------------
 // STALL
+// Reset stall detection state - call when starting motor or changing direction
+inline void resetStallDetection(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
 
+  jointState[ScorbotJointIndex].stallCounter = 0;
+  jointState[ScorbotJointIndex].lastEncoderCount = jointState[ScorbotJointIndex].encoderCount;
+  jointState[ScorbotJointIndex].lastEncoderCheckTime = millis();
+}
+
+// ------------------------------------------------------------------------
 inline bool checkStall(int ScorbotJointIndex) {
   if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
     return false;
   if (jointState[ScorbotJointIndex].motorSpeed == 0)
     return false;
+
+  if (jointState[ScorbotJointIndex].currentGoal == GOAL_IDLE)
+    return false;  // MOTOR_WRIST_PITCH and  MOTOR_WRIST_ROLL drive each other, so ignore stalls on
+                   // the idle joint
 
   const unsigned long STALL_CHECK_INTERVAL_MS = 50;  // how often to check
 
@@ -526,33 +651,32 @@ inline void checkAllStalls() {
 
       // deal with the stall with business logic
       if (jointState[ScorbotJointIndex].currentGoal == GOAL_FIND_HOME) {
-        if (jointState[ScorbotJointIndex].motorSpeed > 0) {
-          // stalled when moving clockwise, we don't know which side, if either, it is stalled at,
-          // so assume at end of CW rotation
-          Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-          Serial.println(": stalled going clockwise, reversing");
-
-          int reversedSpeed = jointState[ScorbotJointIndex].motorSpeed * -1;
-          // stopMotor(ScorbotJointIndex);
-          // delay(100);
-          setMotor(ScorbotJointIndex, reversedSpeed);
-          resetStallDetection(ScorbotJointIndex);
-
-        } else if (jointState[ScorbotJointIndex].motorSpeed < 0) {
-          // stalled when moving clockwise, we don't know which side, if either, it is stalled at,
-          // so assume at end of CW rotation
-
-          Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-          Serial.println(": stalled going counter clockwise, reversing");
-
-          int reversedSpeed = jointState[ScorbotJointIndex].motorSpeed * -1;
-          // stopMotor(ScorbotJointIndex);
-          // delay(100);
-          setMotor(ScorbotJointIndex, reversedSpeed);
-          resetStallDetection(ScorbotJointIndex);
-        } else {
+        if (jointState[ScorbotJointIndex].motorSpeed == 0) {
           // motor is idle, something is weird, set goal to IDLE
           jointState[ScorbotJointIndex].currentGoal = GOAL_IDLE;
+        } else {
+          Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+
+          // stalled but we don't know which side, if either, it is stalled at,
+          // so use motor direction
+          if (jointState[ScorbotJointIndex].motorSpeed > 0) {
+            Serial.println(": stalled going clockwise, reversing");
+
+          } else if (jointState[ScorbotJointIndex].motorSpeed < 0) {
+            // stalled when moving clockwise, we don't know which side, if either, it is stalled at,
+            // so assume at end of CW rotation
+
+            Serial.println(": stalled going counter clockwise, reversing");
+          }
+
+          int reversedSpeed = jointState[ScorbotJointIndex].motorSpeed * -1;
+          if (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL) {
+            // Clear the other wrist axis to avoid differential interference
+            setMotor(ScorbotJointIndex == MOTOR_WRIST_PITCH ? MOTOR_WRIST_ROLL : MOTOR_WRIST_PITCH,
+                     0);
+          }
+          setMotor(ScorbotJointIndex, reversedSpeed);
+          resetStallDetection(ScorbotJointIndex);
         }
       }
     }
@@ -590,7 +714,8 @@ inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
     // we are really on the switch
 
     if (jointState[ScorbotJointIndex].motorSpeed > 0) {
-      Serial.println("hit switch going clockwise, reset home position");
+      // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+      // Serial.println(": hit switch going clockwise, reset home position");
       // if going clockwise, reset home position
       jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
       jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
@@ -610,8 +735,8 @@ inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
             SWITCH_DEBOUNCE_MS * 10) {
       // if going counter clockwise, reset home position
       // just rotated off the switch
-
-      Serial.println("off switch going counter clockwise, reset home position");
+      // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+      // Serial.println(": off switch going counter clockwise, reset home position");
       // future task: validate how many steps difference from CW rising edge to CCW falling edge
 
       jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
@@ -623,6 +748,8 @@ inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
 
   return false;
 }
+
+// ------------------------------------------------------------------------
 
 inline void checkAllHomeSwitches() {
   for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT;
