@@ -31,9 +31,12 @@ The goals of the project are to
 
 ## TODO
 
+- [] add all stop with interrupt
+- [] add joystick control
+- [] add queue of events
 - [x] make 'home' the CW clockwise side of the microswitch. there are ~200 encoder steps where the switch is depressed as the arm moves across the button.
 - [x] gripper home is stall when closed
-- [] wrist pitch and roll movements depend on motors 4-5 working together differential drive
+- [x] wrist pitch and roll movements depend on motors 4-5 working together differential drive
 - [x] shoulder find home
 - [x] write arduino code to get arm to move to home position
 - [x] make replacement microswitch cams
