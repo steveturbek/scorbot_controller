@@ -40,6 +40,11 @@ Based on DB-50 connector wiring and L298N motor driver configuration.
 #define SERIAL_TX 18  // Reserved for Serial1
 #define SERIAL_RX 19  // Reserved for Serial1
 
+// ============================================================================
+// EMERGENCY STOP - Connect momentary button between pin 52 and GND
+// ============================================================================
+#define ESTOP_PIN 52
+
 struct Scorbot_joints_reference {
   int CCW_pin;          // Direction pin (H-bridge IN1 or IN3)
   int CW_pin;           // Direction pin (H-bridge IN2 or IN4)
@@ -193,6 +198,15 @@ inline void setupAllMotorPins() {
   for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
     setupMotorPins(i);
   }
+}
+
+// ============================================================================
+// Configure all 6 motors at once
+inline void setupAllPins() {
+  setupAllMotorPins();
+
+  // Emergency stop button
+  pinMode(ESTOP_PIN, INPUT_PULLUP);
 }
 
 #endif  // SCORBOT_PINS_H

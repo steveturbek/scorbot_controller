@@ -154,7 +154,7 @@ void setup() {
   Serial.println("\n SCORBOT START ===========================");
 
   // Initialize hardware
-  setupAllMotorPins();
+  setupAllPins();
   initializeAllJointStates();
 
   // Safety: stop all motors
@@ -209,6 +209,20 @@ void setup() {
 // ============================================================================
 
 void loop() {
+  // Emergency stop check - first thing in loop
+  if (digitalRead(ESTOP_PIN) == LOW) {
+    for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
+      stopMotor(i);
+      jointState[i].currentGoal = GOAL_FAULT;
+    }
+    Serial.println("EMERGENCY STOP");
+    while (digitalRead(ESTOP_PIN) == LOW) {
+      delay(10);  // Wait for button release
+    }
+    Serial.println("E-Stop released - reset to continue");
+    return;  // Skip rest of loop until reset
+  }
+
   updateAllEncoders();  // CRITICAL: Update all encoders every loop
 
   checkAllStalls();
