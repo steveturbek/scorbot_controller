@@ -268,8 +268,8 @@ inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
       //   break;
 
     case GOAL_IDLE:
-      stopMotor(
-          ScorbotJointIndex);  // stop motor if goal set to idle. double safety from previous bug
+      stopMotor(ScorbotJointIndex);  // stop motor if goal set to idle. double safety from
+      // previous bug
       break;
     case GOAL_FAULT:
       // Nothing to do
@@ -373,35 +373,6 @@ void doGoalFindHome(int ScorbotJointIndex) {
 }
 
 // ============================================================================
-// DIFFERENTIAL DRIVE HELPERS
-// ============================================================================
-
-// Calculate physical motor speeds from abstract wrist joint speeds
-// Returns true if no saturation occurred
-inline bool calculateDifferentialMotorSpeeds(int pitchSpeed, int rollSpeed, int* motor4Speed,
-                                             int* motor5Speed) {
-  // Differential math based on mechanical coupling
-  // Same direction = pitch, Opposite direction = roll
-  int raw_motor4 = pitchSpeed - rollSpeed;  // Pitch motor (physical motor 4)
-  int raw_motor5 = pitchSpeed + rollSpeed;  // Roll motor (physical motor 5)
-
-  // Proportional scaling to maintain motion ratio
-  int maxAbsValue = max(abs(raw_motor4), abs(raw_motor5));
-  if (maxAbsValue > 99) {
-    float scaleFactor = 99.0 / maxAbsValue;
-    raw_motor4 = (int)(raw_motor4 * scaleFactor);
-    raw_motor5 = (int)(raw_motor5 * scaleFactor);
-  }
-}
-
-// Clamp to valid range (safety)
-*motor4Speed = constrain(raw_motor4, -99, 99);
-*motor5Speed = constrain(raw_motor5, -99, 99);
-
-return;
-}
-
-// ============================================================================
 // MOTOR CONTROL FUNCTIONS
 // ============================================================================
 
@@ -431,9 +402,24 @@ inline void setMotor(int ScorbotJointIndex, int speed, bool isDifferentialActive
     // Reads abstract speeds from jointState and calculates physical motor outputs
     int motor4Speed, motor5Speed;
 
-    calculateDifferentialMotorSpeeds(jointState[MOTOR_WRIST_PITCH].motorSpeed,
-                                     jointState[MOTOR_WRIST_ROLL].motorSpeed, &motor4Speed,
-                                     &motor5Speed);
+    // Differential math based on mechanical coupling
+    // Same direction = pitch, Opposite direction = roll
+    int raw_motor4 = jointState[MOTOR_WRIST_PITCH].motorSpeed -
+                     jointState[MOTOR_WRIST_ROLL].motorSpeed;  // Pitch motor (physical motor 4)
+    int raw_motor5 = jointState[MOTOR_WRIST_PITCH].motorSpeed +
+                     jointState[MOTOR_WRIST_ROLL].motorSpeed;  // Roll motor (physical motor 5)
+
+    // Proportional scaling to maintain motion ratio
+    int maxAbsValue = max(abs(raw_motor4), abs(raw_motor5));
+    if (maxAbsValue > 99) {
+      float scaleFactor = 99.0 / maxAbsValue;
+      raw_motor4 = (int)(raw_motor4 * scaleFactor);
+      raw_motor5 = (int)(raw_motor5 * scaleFactor);
+    }
+
+    // Clamp to valid range (safety)
+    motor4Speed = constrain(raw_motor4, -99, 99);
+    motor5Speed = constrain(raw_motor5, -99, 99);
 
     // Apply to physical motors using direct control (bypasses differential logic)
     setMotorDirect(MOTOR_WRIST_PITCH, motor4Speed);
@@ -456,13 +442,13 @@ inline void setMotorDirect(int ScorbotJointIndex, int speed) {
     return;
 
   // Debug output for wrist motors
-  if (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL) {
-    Serial.print("setMotor Direct ");
-    Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-    Serial.print(", ");
-    Serial.print(speed);
-    Serial.println();
-  }
+  // if (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL) {
+  //   Serial.print("setMotor Direct ");
+  //   Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  //   Serial.print(", ");
+  //   Serial.print(speed);
+  //   Serial.println();
+  // }
 
   int motor_min = 0;
   int pwmValue = 0;
@@ -492,8 +478,8 @@ inline void setMotorDirect(int ScorbotJointIndex, int speed) {
 // Stop a motor
 // Usage: stopMotor(MOTOR_BASE);
 inline void stopMotor(int ScorbotJointIndex, bool isDifferentialActive = true) {
-  Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-  Serial.println("stopMotor");
+  // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  // Serial.println(" stopMotor");
 
   setMotor(ScorbotJointIndex, 0, isDifferentialActive);
 }
