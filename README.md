@@ -215,6 +215,7 @@ Here is the pin numbers (looking at the male scorbot cable connector pins)
 | -         | 4     | Wrist Pitch | PWM (motor speed)    | 4           | 2           |             | ENB          |                           |
 | -         | 5     | Wrist Roll  | PWM (motor speed)    | 3           | 3           |             | ENA          |                           |
 | -         | 6     | Gripper     | PWM (motor speed)    | 2           | 3           |             | ENB          |                           |
+| -         | -     | -           | -                    | 52          |             |             |              | Emergency Stop Button     |
 
 ### TABLE 2: POWER CONNECTIONS
 
