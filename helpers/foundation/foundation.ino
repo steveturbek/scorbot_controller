@@ -385,26 +385,20 @@ inline bool calculateDifferentialMotorSpeeds(int pitchSpeed, int rollSpeed, int*
   int raw_motor4 = pitchSpeed - rollSpeed;  // Pitch motor (physical motor 4)
   int raw_motor5 = pitchSpeed + rollSpeed;  // Roll motor (physical motor 5)
 
-  bool saturated = false;
-
-  // Check for saturation (exceeds -99 to +99 range)
-  if (raw_motor4 > 99 || raw_motor4 < -99 || raw_motor5 > 99 || raw_motor5 < -99) {
-    saturated = true;
-
-    // Proportional scaling to maintain motion ratio
-    int maxAbsValue = max(abs(raw_motor4), abs(raw_motor5));
-    if (maxAbsValue > 99) {
-      float scaleFactor = 99.0 / maxAbsValue;
-      raw_motor4 = (int)(raw_motor4 * scaleFactor);
-      raw_motor5 = (int)(raw_motor5 * scaleFactor);
-    }
+  // Proportional scaling to maintain motion ratio
+  int maxAbsValue = max(abs(raw_motor4), abs(raw_motor5));
+  if (maxAbsValue > 99) {
+    float scaleFactor = 99.0 / maxAbsValue;
+    raw_motor4 = (int)(raw_motor4 * scaleFactor);
+    raw_motor5 = (int)(raw_motor5 * scaleFactor);
   }
+}
 
-  // Clamp to valid range (safety)
-  *motor4Speed = constrain(raw_motor4, -99, 99);
-  *motor5Speed = constrain(raw_motor5, -99, 99);
+// Clamp to valid range (safety)
+*motor4Speed = constrain(raw_motor4, -99, 99);
+*motor5Speed = constrain(raw_motor5, -99, 99);
 
-  return !saturated;
+return;
 }
 
 // ============================================================================
