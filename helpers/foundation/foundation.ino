@@ -167,41 +167,12 @@ void setup() {
     jointState[i].lastEncoderCheckTime = millis();
   }
 
-  // start goal base motor find home
   // setGoal(MOTOR_BASE, GOAL_FIND_HOME);
   // setGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
   // setGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
   setGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
   // setGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
   // setGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
-
-  // Manual differential test code (replaced by automatic differential system)
-  // analogWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].pwm_pin, 255);
-  // analogWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].pwm_pin, 255);
-
-  // // makes wrist pitch up only
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
-
-  // //  wrist pitch down,
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
-
-  // wrist pitch nothing , slow clockwise roll
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
-
-  // wrist pitch nothing  counter clockwise roll
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
-  // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
 }
 
 // ============================================================================
@@ -236,11 +207,8 @@ void loop() {
 }
 
 // ============================================================================
+// GOALS
 // ============================================================================
-// ============================================================================
-
-// ============================================================================
-// GOAL UPDATE DISPATCHER
 
 // Set goal for specific motor
 inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
@@ -270,23 +238,22 @@ inline void setGoal(int ScorbotJointIndex, JointGoal goal) {
       break;
 
       // case GOAL_GO_HOME:
-      // doGoalGoHome(ScorbotJointIndex);
+      // setGoalGoHome(ScorbotJointIndex);
       //   break;
 
       // case GOAL_CALIBRATE_RANGE_CCW:
-      //   doGoalCalibrateRange_CCW(ScorbotJointIndex);
+      //   setsGoalCalibrateRange_CCW(ScorbotJointIndex);
       //   break;
 
       // case GOAL_MOVE_TO:
-      //   doGoalMoveTo(ScorbotJointIndex);
+      //   setsGoalMoveTo(ScorbotJointIndex);
       //   break;
 
     case GOAL_IDLE:
-      stopMotor(ScorbotJointIndex);  // stop motor if goal set to idle. double safety from
-      // previous bug
+      stopMotor(ScorbotJointIndex);  // stop motor when goal set to idle for double safety
       break;
     case GOAL_FAULT:
-      // Nothing to do
+      stopMotor(ScorbotJointIndex);  // stop motor when goal set to idle for double safety
       break;
   }
 }
@@ -417,7 +384,32 @@ inline void setMotor(int ScorbotJointIndex, int speed, bool isDifferentialActive
     int motor4Speed, motor5Speed;
 
     // Differential math based on mechanical coupling
-    // Same direction = pitch, Opposite direction = roll
+    // motors Same direction = pitch, Opposite direction = roll
+    // old code for reference and debugging
+    // // makes wrist pitch up only
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
+
+    // //  wrist pitch down,
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
+
+    // wrist pitch nothing , clockwise roll
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
+
+    // wrist pitch nothing  counter clockwise roll
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
+
     int raw_motor4 = jointState[MOTOR_WRIST_PITCH].motorSpeed -
                      jointState[MOTOR_WRIST_ROLL].motorSpeed;  // Pitch motor (physical motor 4)
     int raw_motor5 = jointState[MOTOR_WRIST_PITCH].motorSpeed +
