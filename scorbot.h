@@ -104,7 +104,7 @@ const Scorbot_joints_reference SCORBOT_REF[ScorbotJointIndex_COUNT] = {
             .home_switch_pin = 47,
             .name = "shoulder",
             .motor_min_CCW = 200,  // 0-255
-            .motor_min_CW = 0      // 0-255
+            .motor_min_CW = 200    // 0-255
         },
 
     // ============================================================================
