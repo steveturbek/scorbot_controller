@@ -311,14 +311,14 @@ inline void queueAdvanceIfReady() {
 // ============================================================================
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   delay(500);  // Brief delay to allow Serial to initialize
   // Clear any garbage data in the buffer
   while (Serial.available() > 0) {
     Serial.read();
   }
 
-  Serial.println("\n =============SCORBOT START==============");
+  Serial.println("\n\n=============SCORBOT START==============");
 
   // Initialize hardware
   setupAllPins();
