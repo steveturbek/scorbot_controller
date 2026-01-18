@@ -21,16 +21,19 @@ CW for wrist roll is normal human wrist direction
 
 // Goal-based states
 enum JointGoal {
-  GOAL_IDLE,                 // No active goal, motor at rest
-  GOAL_FIND_HOME,            // Find home switch and set position to 0
+  GOAL_IDLE,         // No active goal, motor at rest
+  GOAL_FIND_HOME,    // Find home switch and set position to 0
+  GOAL_RETURN_HOME,  // Fast travel toward home, then edge detection (use after initial homing)
   GOAL_CALIBRATE_RANGE_CW,   // Find CW limits from home
   GOAL_CALIBRATE_RANGE_CCW,  // Find CCW limits from home
   GOAL_MOVE_TO,              // Move to target encoder position
+  GOAL_WAIT,                 // Wait for specified duration (no motor movement)
   GOAL_FAULT                 // Error condition, requires reset
 };
 
 // Goal names for debugging
-const char* MOTOR_GOAL_NAMES[] = {"IDLE", "FIND_HOME", "CALIBRATE_RANGE", "MOVE_TO", "FAULT"};
+const char* MOTOR_GOAL_NAMES[] = {"IDLE",    "FIND_HOME", "RETURN_HOME", "CALIBRATE_RANGE",
+                                  "MOVE_TO", "WAIT",      "FAULT"};
 
 struct ScorbotJointState {
   bool hasFoundHome;  // Whether home switch has been located
@@ -46,7 +49,7 @@ struct ScorbotJointState {
   long maxEncoderStepsFromHomeCW;            // CW limit from home.   (0 = uncalibrated)
   long maxEncoderStepsFromHomeCCW;           // CCW limit from home (0 = uncalibrated)
   unsigned long lastHomeSwitchDebounceTime;  // For home switch debouncing
-  bool lastHomeSwitchPressed;               // Previous switch state for edge detection
+  bool lastHomeSwitchPressed;                // Previous switch state for edge detection
 
   // Encoder tracking
   long encoderCount;      // Current encoder position
@@ -76,9 +79,11 @@ struct QueuedGoal {
 };
 
 struct QueueGoalGroup {
-  QueuedGoal goals[6];  // Up to 6 parallel goals per GoalGroup
-  int goalCount;        // How many goals in this GoalGroup
-  const char* name;     // Motor name for debugging
+  QueuedGoal goals[6];           // Up to 6 parallel goals per GoalGroup
+  int goalCount;                 // How many goals in this GoalGroup
+  const char* name;              // Motor name for debugging
+  unsigned long waitDurationMs;  // If >0, this is a wait step (no motor goals)
+  unsigned long waitStartTime;   // When wait started (set at dispatch time)
 };
 
 // Queue state
@@ -157,6 +162,8 @@ inline void queueCreateGoalGroup(const char* groupName = "") {
   totalQueueGoalGroups++;
   goalQueue[buildingGoalGroup].goalCount = 0;
   goalQueue[buildingGoalGroup].name = groupName;
+  goalQueue[buildingGoalGroup].waitDurationMs = 0;
+  goalQueue[buildingGoalGroup].waitStartTime = 0;
 
   // Serial.print("Queue: Creating GoalGroup ");
   // Serial.print(buildingGoalGroup);
@@ -192,12 +199,45 @@ inline void queueAddGoal(int motorIndex, JointGoal goal, long targetPosition = 0
   // Serial.println(MOTOR_GOAL_NAMES[goal]);
 }
 
+// Add a wait step - creates its own GoalGroup that waits for the specified duration
+inline void queueCreateGoalGroupWait(unsigned long durationMs, const char* name = "wait") {
+  if (totalQueueGoalGroups >= MAX_QUEUE_STEPS) {
+    Serial.println("Queue: ERROR - queue full!");
+    return;
+  }
+
+  int stepIdx = totalQueueGoalGroups;
+  goalQueue[stepIdx].goalCount = 0;
+  goalQueue[stepIdx].name = name;
+  goalQueue[stepIdx].waitDurationMs = durationMs;
+  goalQueue[stepIdx].waitStartTime = 0;
+  totalQueueGoalGroups++;
+  buildingGoalGroup = -1;  // Not building a motor goal group
+
+  // Serial.print("Queue: Added wait step ");
+  // Serial.print(stepIdx);
+  // Serial.print(" (");
+  // Serial.print(durationMs);
+  // Serial.println(" ms)");
+}
+
 // Dispatch all goals for a given GoalGroup
 inline void queueDispatchStep(int stepIndex) {
   if (stepIndex < 0 || stepIndex >= totalQueueGoalGroups)
     return;
 
   QueueGoalGroup* GoalGroup = &goalQueue[stepIndex];
+
+  // Handle wait steps
+  if (GoalGroup->waitDurationMs > 0) {
+    GoalGroup->waitStartTime = millis();
+    Serial.print("Queue: Starting wait step ");
+    Serial.print(stepIndex);
+    Serial.print(" (");
+    Serial.print(GoalGroup->waitDurationMs);
+    Serial.println(" ms)");
+    return;
+  }
 
   Serial.print("Queue: Starting GoalGroup ");
   Serial.print(stepIndex);
@@ -258,35 +298,46 @@ inline void queueAdvanceIfReady() {
   QueueGoalGroup* GoalGroup = &goalQueue[currentQueueGoalGroup];
   bool allComplete = true;
 
-  // Check all goals in current GoalGroup
-  for (int g = 0; g < GoalGroup->goalCount; g++) {
-    int motorIdx = GoalGroup->goals[g].motorIndex;
-    if (motorIdx < 0 || motorIdx >= ScorbotJointIndex_COUNT)
-      continue;
+  // Handle wait steps
+  if (GoalGroup->waitDurationMs > 0) {
+    if (millis() - GoalGroup->waitStartTime < GoalGroup->waitDurationMs) {
+      return;  // Still waiting
+    }
+    // Wait complete, fall through to advance
+    Serial.print("Queue: Wait step ");
+    Serial.print(currentQueueGoalGroup);
+    Serial.println(" complete");
+  } else {
+    // Check all goals in current GoalGroup
+    for (int g = 0; g < GoalGroup->goalCount; g++) {
+      int motorIdx = GoalGroup->goals[g].motorIndex;
+      if (motorIdx < 0 || motorIdx >= ScorbotJointIndex_COUNT)
+        continue;
 
-    JointGoal state = jointState[motorIdx].currentGoal;
+      JointGoal state = jointState[motorIdx].currentGoal;
 
-    // Check for fault
-    if (state == GOAL_FAULT) {
-      Serial.print("Queue: FAULT on ");
-      Serial.print(SCORBOT_REF[motorIdx].name);
-      Serial.print(" at GoalGroup ");
-      Serial.print(currentQueueGoalGroup);
-      Serial.print(" ");
-      Serial.print(goalQueue[currentQueueGoalGroup].name);
-      Serial.println(" - queue stopped and cleared");
-      queueFaulted = true;
-      return;
+      // Check for fault
+      if (state == GOAL_FAULT) {
+        Serial.print("Queue: FAULT on ");
+        Serial.print(SCORBOT_REF[motorIdx].name);
+        Serial.print(" at GoalGroup ");
+        Serial.print(currentQueueGoalGroup);
+        Serial.print(" ");
+        Serial.print(goalQueue[currentQueueGoalGroup].name);
+        Serial.println(" - queue stopped and cleared");
+        queueFaulted = true;
+        return;
+      }
+
+      // Check if still running (not IDLE)
+      if (state != GOAL_IDLE) {
+        allComplete = false;
+      }
     }
 
-    // Check if still running (not IDLE)
-    if (state != GOAL_IDLE) {
-      allComplete = false;
-    }
+    if (!allComplete)
+      return;  // Still waiting for goals to finish
   }
-
-  if (!allComplete)
-    return;  // Still waiting for goals to finish
 
   // All goals in current GoalGroup complete!
   // Serial.print("Queue: GoalGroup ");
@@ -334,8 +385,13 @@ void setup() {
   // GoalGroups execute sequentially, goals within each group run in parallel
   queueClear();
 
-  queueCreateGoalGroup("base find home");
-  queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueCreateGoalGroup("base return home");
+  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
+
+  // queueCreateGoalGroup("base find home");
+  // queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
   // queueCreateGoalGroup("shoulder find home");
   // queueAddGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
 
@@ -351,13 +407,25 @@ void setup() {
   // queueCreateGoalGroup("gripper find home");
   // queueAddGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
 
-  queueCreateGoalGroup("move base");
-  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 500);  // Move to encoder position
-  queueCreateGoalGroup("base find home");
-  queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
 
   queueCreateGoalGroup("move base");
-  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, -500);  // Move to encoder position
+  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 1000);  // Move to encoder position
+
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueCreateGoalGroup("base return home");
+  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
+
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueCreateGoalGroup("move base");
+  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, -1000);  // Move to encoder position
+
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueCreateGoalGroup("base return home");
+  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
 
   queueStart();  // Begin executing the queue
 }
@@ -432,6 +500,18 @@ inline void startGoal(int ScorbotJointIndex, JointGoal goal) {
       setMotor(ScorbotJointIndex, 80);  // % power for that motor, positive is clockwise
       break;
 
+    case GOAL_RETURN_HOME: {
+      // Fast travel toward home, direction based on current position
+      long currentPos = jointState[ScorbotJointIndex].encoderCount;
+      if (currentPos > 0) {
+        setMotor(ScorbotJointIndex, -80);  // CCW toward home
+      } else if (currentPos < 0) {
+        setMotor(ScorbotJointIndex, 80);  // CW toward home
+      }
+      // If already at 0, doGoalReturnHome will handle edge detection
+      break;
+    }
+
       // case GOAL_GO_HOME:
       // startGoalGoHome(ScorbotJointIndex);
       //   break;
@@ -500,6 +580,10 @@ void doGoal(int ScorbotJointIndex) {
       doGoalFindHome(ScorbotJointIndex);
       break;
 
+    case GOAL_RETURN_HOME:
+      doGoalReturnHome(ScorbotJointIndex);
+      break;
+
       // case GOAL_GO_HOME:
       // doGoalGoHome(ScorbotJointIndex);
       //   break;
@@ -556,6 +640,62 @@ void doGoalFindHome(int ScorbotJointIndex) {
   // Otherwise, keep searching
   // Motor is already moving (started in startGoal)
   // Stall detection will reverse direction if needed
+}
+
+// ------------------------------------------------------------------------
+// Return home: fast travel toward 0, then edge detection when close
+void doGoalReturnHome(int ScorbotJointIndex) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
+
+  if (jointState[ScorbotJointIndex].currentGoal != GOAL_RETURN_HOME) {
+    Serial.println("ERROR in doGoalReturnHome: wrong goal state");
+    startGoal(ScorbotJointIndex, GOAL_FAULT);
+    return;
+  }
+
+  if (jointState[ScorbotJointIndex].hasFoundHome == false) {
+    Serial.println("ERROR in doGoalReturnHome: hasn't found home first, setting to GOAL_FIND_HOME");
+    startGoal(ScorbotJointIndex, GOAL_FIND_HOME);
+    return;
+  }
+
+  long currentPos = jointState[ScorbotJointIndex].encoderCount;
+  const long SLOW_APPROACH_THRESHOLD = 200;  // Start edge detection when within this many counts
+
+  // Phase 1: Fast travel toward home (position 0)
+  if (abs(currentPos) > SLOW_APPROACH_THRESHOLD) {
+    // Still far from home - keep moving fast toward 0
+    if (currentPos > 0) {
+      setMotor(ScorbotJointIndex, -80);  // CCW toward home
+    } else {
+      setMotor(ScorbotJointIndex, 80);  // CW toward home
+    }
+    return;
+  }
+
+  // Phase 2: Close to home - slow down and use edge detection
+  // Move slowly in the direction toward home switch edge
+  int slowSpeed = (currentPos > 0) ? -30 : 30;
+  if (currentPos == 0) {
+    // Already at 0, but need to find exact edge - try CW first
+    slowSpeed = 30;
+  }
+  setMotor(ScorbotJointIndex, slowSpeed);
+
+  // Check if we JUST crossed a home edge recently (same logic as GOAL_FIND_HOME)
+  unsigned long timeSinceLastEdge =
+      millis() - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime;
+
+  if (jointState[ScorbotJointIndex].hasFoundHome && timeSinceLastEdge < 100) {
+    // Found the home edge!
+    stopMotor(ScorbotJointIndex);
+    startGoal(ScorbotJointIndex, GOAL_IDLE);
+
+    Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+    Serial.println(" returned home");
+    return;
+  }
 }
 
 // ------------------------------------------------------------------------
@@ -873,9 +1013,9 @@ inline void checkAllStalls() {
       // Increment total stalls for this goal
       jointState[ScorbotJointIndex].totalStallsThisGoal++;
 
-      Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-      Serial.print(": STALL #");
-      Serial.println(jointState[ScorbotJointIndex].totalStallsThisGoal);
+      // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+      // Serial.print(": STALL #");
+      // Serial.println(jointState[ScorbotJointIndex].totalStallsThisGoal);
 
       // Check if we've stalled too many times - go to FAULT state
       const int MAX_STALLS_BEFORE_FAULT = 2;
