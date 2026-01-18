@@ -4,7 +4,7 @@
 
   */
 
-#include <Arduino.h>
+// #include <Arduino.h>  commented out makes VScode outline view work. Arduino IDE auto includes it
 
 #include "/Users/steveturbek/Documents/scorbot_controller/scorbot_controller/scorbot.h"
 
@@ -198,16 +198,16 @@ inline void queueDispatchStep(int stepIndex) {
 
   QueueGoalGroup* GoalGroup = &goalQueue[stepIndex];
 
-  // Serial.print("Queue: Starting GoalGroup ");
-  // Serial.print(stepIndex);
-  // if (GoalGroup->name != nullptr && GoalGroup->name[0] != '\0') {
-  //   Serial.print(" (");
-  //   Serial.print(GoalGroup->name);
-  //   Serial.print(")");
-  // }
-  // Serial.print(" with ");
-  // Serial.print(GoalGroup->goalCount);
-  // Serial.println(" goal(s)");
+  Serial.print("Queue: Starting GoalGroup ");
+  Serial.print(stepIndex);
+  if (GoalGroup->name != nullptr && GoalGroup->name[0] != '\0') {
+    Serial.print(" (");
+    Serial.print(GoalGroup->name);
+    Serial.print(")");
+  }
+  Serial.print(" with ");
+  Serial.print(GoalGroup->goalCount);
+  Serial.println(" goal(s)");
 
   for (int g = 0; g < GoalGroup->goalCount; g++) {
     QueuedGoal* qg = &GoalGroup->goals[g];
@@ -335,28 +335,28 @@ void setup() {
 
   queueCreateGoalGroup("base find home");
   queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
-  queueCreateGoalGroup("shoulder find home");
-  queueAddGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
+  // queueCreateGoalGroup("shoulder find home");
+  // queueAddGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
 
-  queueCreateGoalGroup("elbow find home");
-  queueAddGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
+  // queueCreateGoalGroup("elbow find home");
+  // queueAddGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
 
-  queueCreateGoalGroup("wrist roll find home");
-  queueAddGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
+  // queueCreateGoalGroup("wrist roll find home");
+  // queueAddGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
 
-  queueCreateGoalGroup("wrist pitch find home");
-  queueAddGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
+  // queueCreateGoalGroup("wrist pitch find home");
+  // queueAddGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
 
-  queueCreateGoalGroup("gripper find home");
-  queueAddGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
+  // queueCreateGoalGroup("gripper find home");
+  // queueAddGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
 
-  // queueCreateGoalGroup("move base");
-  // queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 500);  // Move to encoder position
-  // queueCreateGoalGroup("base find home");
-  // queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
+  queueCreateGoalGroup("move base");
+  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 500);  // Move to encoder position
+  queueCreateGoalGroup("base find home");
+  queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
 
-  // queueCreateGoalGroup("move base");
-  // queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, -500);  // Move to encoder position
+  queueCreateGoalGroup("move base");
+  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, -500);  // Move to encoder position
 
   queueStart();  // Begin executing the queue
 }
@@ -900,13 +900,15 @@ inline void checkAllStalls() {
           // stalled but we don't know which side, if either, it is stalled at,
           // so use motor direction
           if (jointState[ScorbotJointIndex].motorSpeed > 0) {
-            Serial.println(": stalled going clockwise, reversing");
+            Serial.print(": reversing to counter clockwise.  position: ");
+            Serial.println(jointState[ScorbotJointIndex].encoderCount);
 
           } else if (jointState[ScorbotJointIndex].motorSpeed < 0) {
             // stalled when moving clockwise, we don't know which side, if either, it is stalled at,
             // so assume at end of CW rotation
 
-            Serial.println(": stalled going counter clockwise, reversing");
+            Serial.print(": reversing to clockwise.  position: ");
+            Serial.println(jointState[ScorbotJointIndex].encoderCount);
           }
 
           int reversedSpeed = jointState[ScorbotJointIndex].motorSpeed * -1;
