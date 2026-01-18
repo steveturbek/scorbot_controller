@@ -1,7 +1,5 @@
 /*
   SCORBOT motor controller
-
-
   */
 
 #include <Arduino.h>
@@ -12,11 +10,10 @@
 Home is 0
 CW is positive steps
 CCW is negative steps
-for xample Base CCW to home: -7338 CW to home:5734
+for example Base CCW to home: -7338 CW to home:5734
 
 CW closes gripper "Righty-tighty"
 CW for wrist roll is normal human wrist direction
-
 */
 
 // Goal-based states
@@ -537,7 +534,12 @@ inline void startGoal(int ScorbotJointIndex, JointGoal goal) {
   switch (goal) {
     case GOAL_FIND_HOME:
       jointState[ScorbotJointIndex].hasFoundHome = false;
-      setMotor(ScorbotJointIndex, 80);  // % power for that motor, positive is clockwise
+      // If home switch already pressed, back off slowly to find the edge
+      if (isHomeSwitchPressed(ScorbotJointIndex)) {
+        setMotor(ScorbotJointIndex, -30);  // Slow CCW to back off switch
+      } else {
+        setMotor(ScorbotJointIndex, 80);  // Normal CW search
+      }
       break;
 
     case GOAL_RETURN_HOME: {
