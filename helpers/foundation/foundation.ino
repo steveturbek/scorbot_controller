@@ -21,9 +21,9 @@ CW for wrist roll is normal human wrist direction
 
 // Goal-based states
 enum JointGoal {
-  GOAL_IDLE,         // No active goal, motor at rest
-  GOAL_FIND_HOME,    // Find home switch and set position to 0
-  GOAL_RETURN_HOME,  // Fast travel toward home, then edge detection (use after initial homing)
+  GOAL_IDLE,                 // No active goal, motor at rest
+  GOAL_FIND_HOME,            // Find home switch and set position to 0
+  GOAL_RETURN_HOME,          // Fast travel toward home, then edge detection (use after initial homing)
   GOAL_CALIBRATE_RANGE_CW,   // Find CW limits from home
   GOAL_CALIBRATE_RANGE_CCW,  // Find CCW limits from home
   GOAL_MOVE_TO,              // Move to target encoder position
@@ -32,8 +32,7 @@ enum JointGoal {
 };
 
 // Goal names for debugging
-const char* MOTOR_GOAL_NAMES[] = {"IDLE",    "FIND_HOME", "RETURN_HOME", "CALIBRATE_RANGE",
-                                  "MOVE_TO", "WAIT",      "FAULT"};
+const char* MOTOR_GOAL_NAMES[] = {"IDLE", "FIND_HOME", "RETURN_HOME", "CALIBRATE_RANGE", "MOVE_TO", "WAIT", "FAULT"};
 
 struct ScorbotJointState {
   bool hasFoundHome;  // Whether home switch has been located
@@ -485,8 +484,7 @@ inline void startGoal(int ScorbotJointIndex, JointGoal goal) {
   jointState[ScorbotJointIndex].totalStallsThisGoal = 0;  // Reset stall count for new goal
 
   // Reset wrist motor speeds when entering homing mode
-  if (goal == GOAL_FIND_HOME &&
-      (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL)) {
+  if (goal == GOAL_FIND_HOME && (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL)) {
     jointState[MOTOR_WRIST_PITCH].motorSpeed = 0;
     jointState[MOTOR_WRIST_ROLL].motorSpeed = 0;
   }
@@ -524,8 +522,8 @@ inline void startGoal(int ScorbotJointIndex, JointGoal goal) {
     case GOAL_MOVE_TO: {
       // Target position should already be set before calling startGoal
       // Start moving toward target immediately (doGoalMoveTo will adjust speed)
-      long error = jointState[ScorbotJointIndex].targetEncoderCountToMoveTo -
-                   jointState[ScorbotJointIndex].encoderCount;
+      long error =
+          jointState[ScorbotJointIndex].targetEncoderCountToMoveTo - jointState[ScorbotJointIndex].encoderCount;
       if (error > 0) {
         setMotor(ScorbotJointIndex, 80);  // Start moving CW
       } else if (error < 0) {
@@ -547,8 +545,7 @@ inline void startGoal(int ScorbotJointIndex, JointGoal goal) {
 // ------------------------------------------------------------------------
 // Update all active goals
 void doAllGoals() {
-  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT;
-       ScorbotJointIndex++) {
+  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT; ScorbotJointIndex++) {
     if (jointState[ScorbotJointIndex].currentGoal != GOAL_IDLE &&
         jointState[ScorbotJointIndex].currentGoal != GOAL_FAULT) {
       doGoal(ScorbotJointIndex);
@@ -621,8 +618,7 @@ void doGoalFindHome(int ScorbotJointIndex) {
 
   // Check if we JUST crossed a home edge recently
   unsigned long MillisSinceProgramStart = millis();
-  unsigned long timeSinceLastEdge =
-      MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime;
+  unsigned long timeSinceLastEdge = MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime;
 
   // Success conditions: we found home AND it was recent (within last 100ms)
   if (jointState[ScorbotJointIndex].hasFoundHome && timeSinceLastEdge < 100) {
@@ -685,8 +681,7 @@ void doGoalReturnHome(int ScorbotJointIndex) {
   setMotor(ScorbotJointIndex, slowSpeed);
 
   // Check if we JUST crossed a home edge recently (same logic as GOAL_FIND_HOME)
-  unsigned long timeSinceLastEdge =
-      millis() - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime;
+  unsigned long timeSinceLastEdge = millis() - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime;
 
   if (jointState[ScorbotJointIndex].hasFoundHome && timeSinceLastEdge < 100) {
     // Found the home edge!
@@ -773,8 +768,7 @@ inline void setMotor(int ScorbotJointIndex, int speed, bool isDifferentialActive
   // For wrist pitch/roll, differential control is needed because the physical
   // motors are coupled - moving one motor alone produces combined pitch+roll
   // motion. The differential math produces pure pitch or pure roll motion.
-  if (isDifferentialActive &&
-      (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL)) {
+  if (isDifferentialActive && (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL)) {
     // Apply differential motor commands to both physical motors
     // Reads abstract speeds from jointState and calculates physical motor outputs
     int motor4Speed, motor5Speed;
@@ -950,8 +944,7 @@ inline bool checkStall(int ScorbotJointIndex) {
 
   unsigned long MillisSinceProgramStart = millis();
 
-  if (MillisSinceProgramStart - jointState[ScorbotJointIndex].lastEncoderCheckTime <
-      STALL_CHECK_INTERVAL_MS) {
+  if (MillisSinceProgramStart - jointState[ScorbotJointIndex].lastEncoderCheckTime < STALL_CHECK_INTERVAL_MS) {
     return false;
   }  // not enough time to determine stall yet
 
@@ -977,8 +970,7 @@ inline bool checkStall(int ScorbotJointIndex) {
     jointState[ScorbotJointIndex].stallCounter++;  // Increment consecutive stall detections
 
     // If stalled for long enough, report stall
-    if (jointState[ScorbotJointIndex].stallCounter * STALL_CHECK_INTERVAL_MS >=
-        STALL_THRESHOLD_MS) {
+    if (jointState[ScorbotJointIndex].stallCounter * STALL_CHECK_INTERVAL_MS >= STALL_THRESHOLD_MS) {
       jointState[ScorbotJointIndex].stallCounter = 0;  // Reset for next stall detection
       return true;                                     // STALL DETECTED
     }
@@ -993,8 +985,7 @@ inline bool checkStall(int ScorbotJointIndex) {
 }
 // ------------------------------------------------------------------------
 inline void checkAllStalls() {
-  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT;
-       ScorbotJointIndex++) {
+  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT; ScorbotJointIndex++) {
     if (checkStall(ScorbotJointIndex)) {
       if (ScorbotJointIndex == 5 && jointState[ScorbotJointIndex].motorSpeed > 0 &&
           jointState[ScorbotJointIndex].currentGoal ==
@@ -1056,8 +1047,7 @@ inline void checkAllStalls() {
           int reversedSpeed = jointState[ScorbotJointIndex].motorSpeed * -1;
           if (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL) {
             // Clear the other wrist axis to avoid differential interference
-            setMotor(ScorbotJointIndex == MOTOR_WRIST_PITCH ? MOTOR_WRIST_ROLL : MOTOR_WRIST_PITCH,
-                     0);
+            setMotor(ScorbotJointIndex == MOTOR_WRIST_PITCH ? MOTOR_WRIST_ROLL : MOTOR_WRIST_PITCH, 0);
           }
           setMotor(ScorbotJointIndex, reversedSpeed);
           resetStallDetection(ScorbotJointIndex);
@@ -1089,8 +1079,7 @@ inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
   const unsigned long SWITCH_DEBOUNCE_MS = 10;  // Switch debounce time
 
   // Debounce: ignore rapid changes
-  if (MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime <
-      SWITCH_DEBOUNCE_MS)
+  if (MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime < SWITCH_DEBOUNCE_MS)
     return false;
 
   bool currentSwitchPressed = isHomeSwitchPressed(ScorbotJointIndex);
@@ -1140,8 +1129,7 @@ inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
 // ------------------------------------------------------------------------
 
 inline void checkAllHomeSwitches() {
-  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT;
-       ScorbotJointIndex++) {
+  for (int ScorbotJointIndex = 0; ScorbotJointIndex < ScorbotJointIndex_COUNT; ScorbotJointIndex++) {
     if (checkIfHomeSwitchEdge(ScorbotJointIndex)) {
       // deal with the stall with business logic
     }
