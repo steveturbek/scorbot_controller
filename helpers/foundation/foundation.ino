@@ -46,6 +46,7 @@ struct ScorbotJointState {
   long maxEncoderStepsFromHomeCW;            // CW limit from home.   (0 = uncalibrated)
   long maxEncoderStepsFromHomeCCW;           // CCW limit from home (0 = uncalibrated)
   unsigned long lastHomeSwitchDebounceTime;  // For home switch debouncing
+  bool lastHomeSwitchPressed;               // Previous switch state for edge detection
 
   // Encoder tracking
   long encoderCount;      // Current encoder position
@@ -946,44 +947,46 @@ inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
   unsigned long MillisSinceProgramStart = millis();
   const unsigned long SWITCH_DEBOUNCE_MS = 10;  // Switch debounce time
 
-  // jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime is last time the switch was pressed
+  // Debounce: ignore rapid changes
   if (MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime <
       SWITCH_DEBOUNCE_MS)
-    return false;  // ignore to debounce
+    return false;
 
-  // Simply return the current state - switch is active LOW
-  if (isHomeSwitchPressed(ScorbotJointIndex)) {
-    // we are really on the switch
+  bool currentSwitchPressed = isHomeSwitchPressed(ScorbotJointIndex);
+  bool lastSwitchPressed = jointState[ScorbotJointIndex].lastHomeSwitchPressed;
 
+  // Update debounce time on any state change
+  if (currentSwitchPressed != lastSwitchPressed) {
+    jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
+    jointState[ScorbotJointIndex].lastHomeSwitchPressed = currentSwitchPressed;
+  }
+
+  // Detect RISING edge: switch just became pressed (was not pressed, now pressed)
+  if (currentSwitchPressed && !lastSwitchPressed) {
     if (jointState[ScorbotJointIndex].motorSpeed > 0) {
-      // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-      // Serial.println(": hit switch going clockwise, reset home position");
-      // if going clockwise, reset home position
-      jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
+      // Going clockwise onto the switch
+      Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+      Serial.print(": hit switch going clockwise, reset home position, encoderCount= ");
+      Serial.println(jointState[ScorbotJointIndex].encoderCount);
+
       jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
       jointState[ScorbotJointIndex].hasFoundHome = true;
       jointState[ScorbotJointIndex].totalStallsThisGoal = 0;  // reset stalls
       return true;
-
-    } else {
-      jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime =
-          MillisSinceProgramStart;  // hit switch going CCW,
-      return false;  // if stopped or going counter clockwise, ignore till we fall off the switch
     }
-  } else {  // switch is low
+    // If going CCW or stopped when hitting switch, don't reset home
+    return false;
+  }
 
-    if (jointState[ScorbotJointIndex].motorSpeed < 0 &&
-        jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime != 0 &&
-        MillisSinceProgramStart - jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime >
-            SWITCH_DEBOUNCE_MS * 10) {
-      // if going counter clockwise, reset home position
-      // just rotated off the switch
-      // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-      // Serial.println(": off switch going counter clockwise, reset home position");
-      // future task: validate how many steps difference from CW rising edge to CCW falling edge
+  // Detect FALLING edge: switch just became not pressed (was pressed, now not pressed)
+  if (!currentSwitchPressed && lastSwitchPressed) {
+    if (jointState[ScorbotJointIndex].motorSpeed < 0) {
+      // Going counter-clockwise off the switch
+      Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+      Serial.print(": off switch going counter clockwise, reset home position, encoderCount= ");
+      Serial.println(jointState[ScorbotJointIndex].encoderCount);
 
-      jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
-      jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
+      jointState[ScorbotJointIndex].encoderCount = 0;  // Set CCW edge as zero
       jointState[ScorbotJointIndex].hasFoundHome = true;
       jointState[ScorbotJointIndex].totalStallsThisGoal = 0;  // reset stalls
       return true;
