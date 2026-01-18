@@ -4,7 +4,7 @@
 
   */
 
-// #include <Arduino.h>  commented out makes VScode outline view work. Arduino IDE auto includes it
+#include <Arduino.h>
 
 #include "/Users/steveturbek/Documents/scorbot_controller/scorbot_controller/scorbot.h"
 
