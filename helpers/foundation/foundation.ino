@@ -962,6 +962,7 @@ inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
       jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
       jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
       jointState[ScorbotJointIndex].hasFoundHome = true;
+      jointState[ScorbotJointIndex].totalStallsThisGoal = 0;  // reset stalls
       return true;
 
     } else {
@@ -984,6 +985,7 @@ inline bool checkIfHomeSwitchEdge(int ScorbotJointIndex) {
       jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = MillisSinceProgramStart;
       jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
       jointState[ScorbotJointIndex].hasFoundHome = true;
+      jointState[ScorbotJointIndex].totalStallsThisGoal = 0;  // reset stalls
       return true;
     }
   }
