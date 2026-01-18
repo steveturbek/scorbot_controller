@@ -32,7 +32,11 @@ The goals of the project are to
 ## TODO
 
 - [] add joystick control
-- [] add move to position
+- [] build
+- [] measure and software hard code end stops
+- [] some kind of clean up position regit before switches so the homing process goes faster
+- [] add move to end/stall and stop (good for picking up item with gripper)
+- [x] add move to position
 - [x] add queue of goals, with parallel and sequential steps
 - [x] add all stop with interrupt
 - [x] make 'home' the CW clockwise side of the microswitch. there are ~200 encoder steps where the switch is depressed as the arm moves across the button.
@@ -45,7 +49,6 @@ The goals of the project are to
 ## Project Log
 
 - January 2026
-
   - Rough layout of parts on a board - the motors move!
   - modeled and printed controller case. Much easier thinking after just picking a layout. next time would just print base and areas under the ports.
   - Wired up mega, DB-50 connector and 3 L298N's. My soldering skills are very limited. I would use screw terminal shield for the Arduino Mega next time.
@@ -61,14 +64,13 @@ The goals of the project are to
   - Arduino IDE is pretty slow. VS Code extension for arduino has been deprecated. PlatformIO looks too complicated for this project. Arduino Community Edition might work, but CLI, etc are too complicated at this point
   - installed CLANG to VSCode to get linting/formatting
   - MOTOR_ELBOW was a big pain, would not go CCW. turned out the CCW pin (arduinio pin 27) was loose
+  - added Queue system to make sequence of actions
 
 - December 2025
-
   - modeled `scorbot joint cover with microswitch cam.stl`, printed and replaced cams. 1 original cam remains
   - ordered L298Ns, Arduino Mega, power supply
 
 - August 2025
-
   - Got Scorbot ER III discarded by friends at NYC First. No controller or documentation
   - serial number 2090047 model "robot"
   - identified it as scorbot ER iii, found documentation and github projects.

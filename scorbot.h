@@ -163,16 +163,17 @@ const Scorbot_joints_reference SCORBOT_REF[ScorbotJointIndex_COUNT] = {
     // GRIPPER
     // ============================================================================
     // L298N Board 3, Motor B (Output 2)
+    // Clockwise closes gripper
     [MOTOR_GRIPPER] = {
         .CCW_pin = 33,
         .CW_pin = 32,
         .pwm_pin = 2,
-        .encoder_p0_pin = 44,
-        .encoder_p1_pin = 45,
+        .encoder_p0_pin = 45,  // Swapped with p1 to invert encoder direction
+        .encoder_p1_pin = 44,
         .home_switch_pin = 51,
         .name = "gripper",
-        .motor_min_CCW = 100,  // 0-255
-        .motor_min_CW = 100    // 0-255
+        .motor_min_CCW = 200,  // 0-255
+        .motor_min_CW = 200    // 0-255
     }};
 
 // ============================================================================

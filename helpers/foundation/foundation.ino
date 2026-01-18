@@ -430,9 +430,9 @@ inline void queueAdvanceIfReady() {
       return;  // Still waiting
     }
     // Wait complete, fall through to advance
-    Serial.print("Queue: Wait step ");
-    Serial.print(currentQueueGoalGroup);
-    Serial.println(" complete");
+    // Serial.print("Queue: Wait step ");
+    // Serial.print(currentQueueGoalGroup);
+    // Serial.println(" complete");
   } else {
     // Check all goals in current GoalGroup
     for (int g = 0; g < GoalGroup->goalCount; g++) {
@@ -488,9 +488,6 @@ void queueAddGoalsFindHomeAll() {
   // these need to be done in sequence or they interfere with each other.
   //  Elbow has the most trouble, some kind of mechanical issue probably
 
-  queueCreateGoalGroup("base find home");
-  queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
-
   queueCreateGoalGroup("shoulder find home");
   queueAddGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
 
@@ -505,6 +502,10 @@ void queueAddGoalsFindHomeAll() {
 
   queueCreateGoalGroup("elbow find home");
   queueAddGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
+
+  // do base at end because it swings wildly and can hit stuff!
+  queueCreateGoalGroup("base find home");
+  queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
 }
 
 // ============================================================================
@@ -752,6 +753,12 @@ void doGoalMoveTo(int ScorbotJointIndex) {
   long targetPos = jointState[ScorbotJointIndex].targetEncoderCountToMoveTo;
   long error = targetPos - currentPos;
 
+  // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  // Serial.print(" pos: ");
+  // Serial.print(currentPos);
+  // Serial.print(" target: ");
+  // Serial.println(targetPos);
+
   const long POSITION_TOLERANCE = 10;  // encoder counts - adjust as needed
 
   // Check if we've reached the target
@@ -904,6 +911,7 @@ inline void checkAllStalls() {
         jointState[ScorbotJointIndex].lastHomeSwitchDebounceTime = millis();
         jointState[ScorbotJointIndex].encoderCount = 0;  // Set CW edge as zero
         jointState[ScorbotJointIndex].hasFoundHome = true;
+        jointState[ScorbotJointIndex].totalStallsThisGoal = 0;  // reset stalls
         Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
         Serial.println(" is home");
         return;
@@ -912,9 +920,9 @@ inline void checkAllStalls() {
       // Increment total stalls for this goal
       jointState[ScorbotJointIndex].totalStallsThisGoal++;
 
-      // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-      // Serial.print(": STALL #");
-      // Serial.println(jointState[ScorbotJointIndex].totalStallsThisGoal);
+      Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+      Serial.print(": STALL #");
+      Serial.println(jointState[ScorbotJointIndex].totalStallsThisGoal);
 
       // Check if we've stalled too many times - go to FAULT state
       const int MAX_STALLS_BEFORE_FAULT = 3;
@@ -1095,7 +1103,7 @@ void printJointState(int ScorbotJointIndex) {
 void setup() {
   Serial.begin(115200);
   delay(500);  // Brief delay to allow Serial to initialize
-  // Clear any garbage data in the buffer
+  // Clear any old data in the buffer
   while (Serial.available() > 0) {
     Serial.read();
   }
@@ -1111,30 +1119,29 @@ void setup() {
     stopMotor(i);
   }
 
-  // Build homing sequence using the goal queue
+  // Build sequence using the goal queue
   // GoalGroups execute sequentially, goals within each group run in parallel
   queueClear();
 
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
-
   queueAddGoalsFindHomeAll();
 
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all goals
+
+  queueCreateGoalGroup("open gripper");
+  queueAddGoal(MOTOR_GRIPPER, GOAL_MOVE_TO, -300);  // all gripper positions are negative, 0 is closed
 
   queueCreateGoalGroup("move base");
-  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 1000);  // Move to encoder position
+  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 1000);       // Move to encoder position
+  queueAddGoal(MOTOR_SHOULDER, GOAL_MOVE_TO, -1000);  // negative is move down
 
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+  queueCreateGoalGroup("Grab item");
+  queueAddGoal(MOTOR_GRIPPER, GOAL_MOVE_TO, -100);  // all gripper positions are negative, 0 is closed
 
-  queueCreateGoalGroup("base return home");
-  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
+  queueCreateGoalGroup("go to new position");
+  queueAddGoal(MOTOR_SHOULDER, GOAL_MOVE_TO, 1000);  // positive is move up
+  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 1000);      // Move to encoder position
 
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
-
-  queueCreateGoalGroup("move base");
-  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, -1000);  // Move to encoder position
-
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all goals
 
   queueCreateGoalGroup("base return home");
   queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
