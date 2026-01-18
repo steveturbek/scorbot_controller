@@ -358,6 +358,25 @@ inline void queueAdvanceIfReady() {
   queueDispatchStep(currentQueueGoalGroup);
 }
 
+void queueAddGoalsFindHomeAll() {
+  queueCreateGoalGroup("base find home");
+  queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
+  queueCreateGoalGroup("shoulder find home");
+  queueAddGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
+
+  queueCreateGoalGroup("elbow find home");
+  queueAddGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
+
+  queueCreateGoalGroup("wrist roll find home");
+  queueAddGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
+
+  queueCreateGoalGroup("wrist pitch find home");
+  queueAddGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
+
+  queueCreateGoalGroup("gripper find home");
+  queueAddGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
+}
+
 // ============================================================================
 // SETUP
 // ============================================================================
@@ -387,25 +406,7 @@ void setup() {
 
   queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
 
-  queueCreateGoalGroup("base return home");
-  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
-
-  // queueCreateGoalGroup("base find home");
-  // queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
-  // queueCreateGoalGroup("shoulder find home");
-  // queueAddGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
-
-  // queueCreateGoalGroup("elbow find home");
-  // queueAddGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
-
-  // queueCreateGoalGroup("wrist roll find home");
-  // queueAddGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
-
-  // queueCreateGoalGroup("wrist pitch find home");
-  // queueAddGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
-
-  // queueCreateGoalGroup("gripper find home");
-  // queueAddGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
+  queueAddGoalsFindHomeAll();
 
   queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
 
@@ -1018,8 +1019,8 @@ inline void checkAllStalls() {
       // Serial.println(jointState[ScorbotJointIndex].totalStallsThisGoal);
 
       // Check if we've stalled too many times - go to FAULT state
-      const int MAX_STALLS_BEFORE_FAULT = 2;
-      if (jointState[ScorbotJointIndex].totalStallsThisGoal >= MAX_STALLS_BEFORE_FAULT) {
+      const int MAX_STALLS_BEFORE_FAULT = 3;
+      if (jointState[ScorbotJointIndex].totalStallsThisGoal > MAX_STALLS_BEFORE_FAULT) {
         Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
         Serial.print(": Too many stalls (");
         Serial.print(jointState[ScorbotJointIndex].totalStallsThisGoal);
