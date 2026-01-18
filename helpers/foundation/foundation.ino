@@ -93,12 +93,6 @@ int buildingGoalGroup = -1;      // Which GoalGroup we're currently adding goals
 bool queueFaulted = false;       // True if queue stopped due to motor fault
 
 // ============================================================================
-// FORWARD DECLARATIONS
-// ============================================================================
-void setMotor(int ScorbotJointIndex, int speed, bool isDifferentialActive = true);
-void stopMotor(int ScorbotJointIndex, bool isDifferentialActive = true);
-
-// ============================================================================
 // STATE INITIALIZATION
 // ============================================================================
 
@@ -124,6 +118,142 @@ inline void initializeAllJointStates() {
     jointState[i].stallCounter = 0;
     jointState[i].totalStallsThisGoal = 0;
   }
+}
+
+// ============================================================================
+// MOTOR CONTROL FUNCTIONS
+// ============================================================================
+
+// ------------------------------------------------------------------------
+
+inline void setMotor(int ScorbotJointIndex, int speed, bool isDifferentialActive = true) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
+  if (speed < -99 || speed > 99)
+    return;
+
+  // Store the abstract/logical speed in jointState
+  jointState[ScorbotJointIndex].motorSpeed = speed;
+
+  // Serial.print("setMotor ");
+  // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  // Serial.print(", ");
+  // Serial.println(speed);
+
+  // DIFFERENTIAL DRIVE FOR WRIST
+  // For wrist pitch/roll, differential control is needed because the physical
+  // motors are coupled - moving one motor alone produces combined pitch+roll
+  // motion. The differential math produces pure pitch or pure roll motion.
+  if (isDifferentialActive && (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL)) {
+    // Apply differential motor commands to both physical motors
+    // Reads abstract speeds from jointState and calculates physical motor outputs
+    int motor4Speed, motor5Speed;
+
+    // Differential math based on mechanical coupling
+    // motors Same direction = pitch, Opposite direction = roll
+    // old code for reference and debugging
+    // // makes wrist pitch up only
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
+
+    // //  wrist pitch down,
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
+
+    // wrist pitch nothing , clockwise roll
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
+
+    // wrist pitch nothing  counter clockwise roll
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
+    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
+
+    int raw_motor4 = jointState[MOTOR_WRIST_PITCH].motorSpeed -
+                     jointState[MOTOR_WRIST_ROLL].motorSpeed;  // Pitch motor (physical motor 4)
+    int raw_motor5 = jointState[MOTOR_WRIST_PITCH].motorSpeed +
+                     jointState[MOTOR_WRIST_ROLL].motorSpeed;  // Roll motor (physical motor 5)
+
+    // Proportional scaling to maintain motion ratio
+    int maxAbsValue = max(abs(raw_motor4), abs(raw_motor5));
+    if (maxAbsValue > 99) {
+      float scaleFactor = 99.0 / maxAbsValue;
+      raw_motor4 = (int)(raw_motor4 * scaleFactor);
+      raw_motor5 = (int)(raw_motor5 * scaleFactor);
+    }
+
+    // Clamp to valid range (safety)
+    motor4Speed = constrain(raw_motor4, -99, 99);
+    motor5Speed = constrain(raw_motor5, -99, 99);
+
+    // Apply to physical motors using direct control (bypasses differential logic)
+    setMotorDirect(MOTOR_WRIST_PITCH, motor4Speed);
+    setMotorDirect(MOTOR_WRIST_ROLL, motor5Speed);
+
+    return;
+  }
+
+  // NORMAL (NON-DIFFERENTIAL) MOTOR CONTROL
+  setMotorDirect(ScorbotJointIndex, speed);
+}
+
+// ------------------------------------------------------------------------
+// Direct motor control - sets physical motor without differential interception
+// Used internally by differential system to avoid recursion
+inline void setMotorDirect(int ScorbotJointIndex, int speed) {
+  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
+    return;
+  if (speed < -99 || speed > 99)
+    return;
+
+  // Debug output for wrist motors
+  // if (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL) {
+  //   Serial.print("setMotor Direct ");
+  //   Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  //   Serial.print(", ");
+  //   Serial.print(speed);
+  //   Serial.println();
+  // }
+
+  int motor_min = 0;
+  int pwmValue = 0;
+
+  if (speed > 0) {  // clockwise
+    motor_min = SCORBOT_REF[ScorbotJointIndex].motor_min_CW;
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, HIGH);
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, LOW);
+  } else if (speed < 0) {  // counter clockwise
+    motor_min = SCORBOT_REF[ScorbotJointIndex].motor_min_CCW;
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, HIGH);
+  } else {  // stop
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, LOW);
+    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
+    analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, 0);
+    // Don't modify jointState.motorSpeed here - that's the logical speed managed by setMotor()
+    return;
+  }
+
+  // Don't modify jointState.motorSpeed here - that's the logical speed managed by setMotor()
+  pwmValue = map(abs(speed), 0, 99, motor_min, 255);
+  analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, pwmValue);
+}
+
+// ------------------------------------------------------------------------
+// Stop a motor
+// Usage: stopMotor(MOTOR_BASE);
+inline void stopMotor(int ScorbotJointIndex, bool isDifferentialActive = true) {
+  // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
+  // Serial.println(" stopMotor");
+
+  setMotor(ScorbotJointIndex, 0, isDifferentialActive);
 }
 
 // ============================================================================
@@ -358,115 +488,26 @@ inline void queueAdvanceIfReady() {
 }
 
 void queueAddGoalsFindHomeAll() {
+  // these need to be done in sequence or they interfere with each other.
+  //  Elbow has the most trouble, some kind of mechanical issue probably
+
   queueCreateGoalGroup("base find home");
   queueAddGoal(MOTOR_BASE, GOAL_FIND_HOME);
+
   queueCreateGoalGroup("shoulder find home");
   queueAddGoal(MOTOR_SHOULDER, GOAL_FIND_HOME);
-
-  queueCreateGoalGroup("elbow find home");
-  queueAddGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
-
-  queueCreateGoalGroup("wrist roll find home");
-  queueAddGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
 
   queueCreateGoalGroup("wrist pitch find home");
   queueAddGoal(MOTOR_WRIST_PITCH, GOAL_FIND_HOME);
 
+  queueCreateGoalGroup("wrist roll find home");
+  queueAddGoal(MOTOR_WRIST_ROLL, GOAL_FIND_HOME);
+
   queueCreateGoalGroup("gripper find home");
   queueAddGoal(MOTOR_GRIPPER, GOAL_FIND_HOME);
-}
 
-// ============================================================================
-// SETUP
-// ============================================================================
-
-void setup() {
-  Serial.begin(115200);
-  delay(500);  // Brief delay to allow Serial to initialize
-  // Clear any garbage data in the buffer
-  while (Serial.available() > 0) {
-    Serial.read();
-  }
-
-  Serial.println("\n\n=============SCORBOT START==============");
-
-  // Initialize hardware
-  setupAllPins();
-  initializeAllJointStates();
-
-  // Safety: stop all motors
-  for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
-    stopMotor(i);
-  }
-
-  // Build homing sequence using the goal queue
-  // GoalGroups execute sequentially, goals within each group run in parallel
-  queueClear();
-
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
-
-  queueAddGoalsFindHomeAll();
-
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
-
-  queueCreateGoalGroup("move base");
-  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 1000);  // Move to encoder position
-
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
-
-  queueCreateGoalGroup("base return home");
-  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
-
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
-
-  queueCreateGoalGroup("move base");
-  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, -1000);  // Move to encoder position
-
-  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
-
-  queueCreateGoalGroup("base return home");
-  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
-
-  queueStart();  // Begin executing the queue
-}
-
-// ============================================================================
-// MAIN LOOP
-// ============================================================================
-
-void loop() {
-  // Emergency stop check - first thing in loop
-  if (digitalRead(ESTOP_PIN) == LOW) {
-    for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
-      stopMotor(i);
-      jointState[i].currentGoal = GOAL_FAULT;
-    }
-    // Also halt the queue on E-stop
-    if (queueIsRunning()) {
-      queueFaulted = true;
-      Serial.println("Queue: Halted by E-STOP");
-    }
-    Serial.println("EMERGENCY STOP");
-    while (digitalRead(ESTOP_PIN) == LOW) {
-      delay(10);  // Wait for button release
-    }
-    Serial.println("E-Stop released - reset to continue");
-    return;  // Skip rest of loop until reset
-  }
-
-  updateAllEncoders();  // CRITICAL: Update all encoders every loop
-
-  checkAllStalls();
-
-  checkAllHomeSwitches();
-
-  // Update all active goals
-  doAllGoals();
-
-  // Check if queue GoalGroup is complete and advance
-  queueAdvanceIfReady();
-
-  delay(1);
+  queueCreateGoalGroup("elbow find home");
+  queueAddGoal(MOTOR_ELBOW, GOAL_FIND_HOME);
 }
 
 // ============================================================================
@@ -742,142 +783,6 @@ void doGoalMoveTo(int ScorbotJointIndex) {
   if (jointState[ScorbotJointIndex].motorSpeed != speed) {
     setMotor(ScorbotJointIndex, speed);
   }
-}
-
-// ============================================================================
-// MOTOR CONTROL FUNCTIONS
-// ============================================================================
-
-// ------------------------------------------------------------------------
-
-inline void setMotor(int ScorbotJointIndex, int speed, bool isDifferentialActive = true) {
-  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
-    return;
-  if (speed < -99 || speed > 99)
-    return;
-
-  // Store the abstract/logical speed in jointState
-  jointState[ScorbotJointIndex].motorSpeed = speed;
-
-  // Serial.print("setMotor ");
-  // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-  // Serial.print(", ");
-  // Serial.println(speed);
-
-  // DIFFERENTIAL DRIVE FOR WRIST
-  // For wrist pitch/roll, differential control is needed because the physical
-  // motors are coupled - moving one motor alone produces combined pitch+roll
-  // motion. The differential math produces pure pitch or pure roll motion.
-  if (isDifferentialActive && (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL)) {
-    // Apply differential motor commands to both physical motors
-    // Reads abstract speeds from jointState and calculates physical motor outputs
-    int motor4Speed, motor5Speed;
-
-    // Differential math based on mechanical coupling
-    // motors Same direction = pitch, Opposite direction = roll
-    // old code for reference and debugging
-    // // makes wrist pitch up only
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
-
-    // //  wrist pitch down,
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
-
-    // wrist pitch nothing , clockwise roll
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, LOW);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, HIGH);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, HIGH);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, LOW);
-
-    // wrist pitch nothing  counter clockwise roll
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CW_pin, HIGH);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_PITCH].CCW_pin, LOW);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CW_pin, LOW);
-    // digitalWrite(SCORBOT_REF[MOTOR_WRIST_ROLL].CCW_pin, HIGH);
-
-    int raw_motor4 = jointState[MOTOR_WRIST_PITCH].motorSpeed -
-                     jointState[MOTOR_WRIST_ROLL].motorSpeed;  // Pitch motor (physical motor 4)
-    int raw_motor5 = jointState[MOTOR_WRIST_PITCH].motorSpeed +
-                     jointState[MOTOR_WRIST_ROLL].motorSpeed;  // Roll motor (physical motor 5)
-
-    // Proportional scaling to maintain motion ratio
-    int maxAbsValue = max(abs(raw_motor4), abs(raw_motor5));
-    if (maxAbsValue > 99) {
-      float scaleFactor = 99.0 / maxAbsValue;
-      raw_motor4 = (int)(raw_motor4 * scaleFactor);
-      raw_motor5 = (int)(raw_motor5 * scaleFactor);
-    }
-
-    // Clamp to valid range (safety)
-    motor4Speed = constrain(raw_motor4, -99, 99);
-    motor5Speed = constrain(raw_motor5, -99, 99);
-
-    // Apply to physical motors using direct control (bypasses differential logic)
-    setMotorDirect(MOTOR_WRIST_PITCH, motor4Speed);
-    setMotorDirect(MOTOR_WRIST_ROLL, motor5Speed);
-
-    return;
-  }
-
-  // NORMAL (NON-DIFFERENTIAL) MOTOR CONTROL
-  setMotorDirect(ScorbotJointIndex, speed);
-}
-
-// ------------------------------------------------------------------------
-// Direct motor control - sets physical motor without differential interception
-// Used internally by differential system to avoid recursion
-inline void setMotorDirect(int ScorbotJointIndex, int speed) {
-  if (ScorbotJointIndex < 0 || ScorbotJointIndex >= ScorbotJointIndex_COUNT)
-    return;
-  if (speed < -99 || speed > 99)
-    return;
-
-  // Debug output for wrist motors
-  // if (ScorbotJointIndex == MOTOR_WRIST_PITCH || ScorbotJointIndex == MOTOR_WRIST_ROLL) {
-  //   Serial.print("setMotor Direct ");
-  //   Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-  //   Serial.print(", ");
-  //   Serial.print(speed);
-  //   Serial.println();
-  // }
-
-  int motor_min = 0;
-  int pwmValue = 0;
-
-  if (speed > 0) {  // clockwise
-    motor_min = SCORBOT_REF[ScorbotJointIndex].motor_min_CW;
-    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, HIGH);
-    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, LOW);
-  } else if (speed < 0) {  // counter clockwise
-    motor_min = SCORBOT_REF[ScorbotJointIndex].motor_min_CCW;
-    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
-    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, HIGH);
-  } else {  // stop
-    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CCW_pin, LOW);
-    digitalWrite(SCORBOT_REF[ScorbotJointIndex].CW_pin, LOW);
-    analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, 0);
-    // Don't modify jointState.motorSpeed here - that's the logical speed managed by setMotor()
-    return;
-  }
-
-  // Don't modify jointState.motorSpeed here - that's the logical speed managed by setMotor()
-  pwmValue = map(abs(speed), 0, 99, motor_min, 255);
-  analogWrite(SCORBOT_REF[ScorbotJointIndex].pwm_pin, pwmValue);
-}
-
-// ------------------------------------------------------------------------
-// Stop a motor
-// Usage: stopMotor(MOTOR_BASE);
-inline void stopMotor(int ScorbotJointIndex, bool isDifferentialActive = true) {
-  // Serial.print(SCORBOT_REF[ScorbotJointIndex].name);
-  // Serial.println(" stopMotor");
-
-  setMotor(ScorbotJointIndex, 0, isDifferentialActive);
 }
 
 // ============================================================================
@@ -1179,4 +1084,97 @@ void printJointState(int ScorbotJointIndex) {
   Serial.print("totalStallsThisGoal: ");
   Serial.println(s->totalStallsThisGoal);
   Serial.println("====================");
+}
+
+// ============================================================================
+// SETUP
+// ============================================================================
+
+void setup() {
+  Serial.begin(115200);
+  delay(500);  // Brief delay to allow Serial to initialize
+  // Clear any garbage data in the buffer
+  while (Serial.available() > 0) {
+    Serial.read();
+  }
+
+  Serial.println("\n\n=============SCORBOT START==============");
+
+  // Initialize hardware
+  setupAllPins();
+  initializeAllJointStates();
+
+  // Safety: stop all motors
+  for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
+    stopMotor(i);
+  }
+
+  // Build homing sequence using the goal queue
+  // GoalGroups execute sequentially, goals within each group run in parallel
+  queueClear();
+
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueAddGoalsFindHomeAll();
+
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueCreateGoalGroup("move base");
+  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 1000);  // Move to encoder position
+
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueCreateGoalGroup("base return home");
+  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
+
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueCreateGoalGroup("move base");
+  queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, -1000);  // Move to encoder position
+
+  queueCreateGoalGroupWait(1000);  // Wait 1 second, pauses all
+
+  queueCreateGoalGroup("base return home");
+  queueAddGoal(MOTOR_BASE, GOAL_RETURN_HOME);
+
+  queueStart();  // Begin executing the queue
+}
+
+// ============================================================================
+// MAIN LOOP
+// ============================================================================
+
+void loop() {
+  // Emergency stop check - first thing in loop
+  if (digitalRead(ESTOP_PIN) == LOW) {
+    for (int i = 0; i < ScorbotJointIndex_COUNT; i++) {
+      stopMotor(i);
+      jointState[i].currentGoal = GOAL_FAULT;
+    }
+    // Also halt the queue on E-stop
+    if (queueIsRunning()) {
+      queueFaulted = true;
+      Serial.println("Queue: Halted by E-STOP");
+    }
+    Serial.println("EMERGENCY STOP");
+    while (digitalRead(ESTOP_PIN) == LOW) {
+      delay(10);  // Wait for button release
+    }
+    Serial.println("E-Stop released - reset to continue");
+    return;  // Skip rest of loop until reset
+  }
+
+  updateAllEncoders();  // CRITICAL: Update all encoders every loop
+
+  checkAllStalls();
+
+  checkAllHomeSwitches();
+
+  // Update all active goals
+  doAllGoals();
+
+  // Check if queue GoalGroup is complete and advance
+  queueAdvanceIfReady();
+
+  delay(1);
 }
