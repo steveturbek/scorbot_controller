@@ -1,42 +1,20 @@
 # Scorbot Robot Controller
 
----
-
-title: Scorbot Robot Arm Rebuild
-layout: default
-
----
-
 ## Description
 
-Arduino based motor controller for rescued Scorbot ER III robot arm.
+Arduino-based motor controller and software for rescued Scorbot ER III robot arm.
 
 ![Scorbot controller hardware ](images/Scorbot_controller.jpeg)
 
-   <video autoplay muted loop playsinline id="myVideo">
-                  <source src="images/scorbot.mp4" type="video/mp4" />
-                </video>
-Video of simple start up and motion demo
+<video autoplay muted loop playsinline id="myVideo">
+<source src="images/scorbot.mp4" type="video/mp4" />
+</video>
 
-## Project Goals
+[Video of Scorbot start up and simple motion demo](images/scorbot.mp4)
 
-This is a messing around, learning project inspired by a free robot arm. The Scorbot ER III is a circa 1995 robot. So simple, maybe even I can work with it!
+## Potential Future Steps
 
-The goals of the project are to
-
-1. Learn
-1. Restore the basic functionality of movement and encoders
-1. Design and build an arduino based controller that accepts a joystick-type controller and data input to operate.
-1. Enable design students to design and build a microbit based joystick controller
-1. Design and build a case
-
-## When might I quit this project?
-
-- If motors, or encoders stop working
-- If costs go above $200
-- If effort goes beyond a few weeks
-
-## Future Steps
+The project is complete as a demostration of reviving the Scorbot, but future exploration could include:
 
 - [] add direct joystick control
 - [] add Microbit remote control for student project
@@ -100,6 +78,24 @@ The goals of the project are to
   - assuming other encoders work, proceeding with buying parts
   - arduino mega has 5v outputs
   - L298N H bridge enable pins can be PWM'd for speed control
+
+### Project Goals
+
+This is a messing around, learning project inspired by a free robot arm. The Scorbot ER III is a circa 1995 robot. So simple, maybe even I can work with it!
+
+The goals of the project are to
+
+1. Learn
+1. Restore the basic functionality of movement and encoders
+1. Design and build an arduino based controller that accepts a joystick-type controller and data input to operate.
+1. Enable design students to design and build a microbit based joystick controller
+1. Design and build a case
+
+### When might I quit this project?
+
+- If motors, or encoders stop working
+- If costs go above $200
+- If effort goes beyond a few weeks
 
 ## Project Parts List
 
