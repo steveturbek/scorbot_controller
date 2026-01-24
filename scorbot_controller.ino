@@ -18,7 +18,7 @@ See Readme for next steps in project.
 #include <Arduino.h>
 
 // this is the definitions of pins and hardware
-#include "/Users/steveturbek/Documents/scorbot_controller/scorbot_controller/scorbot.h"
+#include "scorbot.h"
 
 // Goal-based states
 enum JointGoal {

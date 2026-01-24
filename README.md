@@ -2,7 +2,7 @@
 
 ---
 
-title: Scorbot robot rebuild
+title: Scorbot Robot Arm Rebuild
 layout: default
 
 ---
@@ -10,6 +10,13 @@ layout: default
 ## Description
 
 Arduino based motor controller for rescued Scorbot ER III robot arm.
+
+![Scorbot controller hardware ](images/Scorbot_controller.jpeg)
+
+   <video autoplay muted loop playsinline id="myVideo">
+                  <source src="images/scorbot.mp4" type="video/mp4" />
+                </video>
+Video of simple start up and motion demo
 
 ## Project Goals
 

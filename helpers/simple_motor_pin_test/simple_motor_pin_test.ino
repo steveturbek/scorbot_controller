@@ -1,4 +1,4 @@
-#include "/Users/steveturbek/Documents/scorbot_controller/scorbot_controller/scorbot.h"
+#include "../../scorbot.h"
 
 int ScorbotJointIndex = 5;
 int speed = 50;
