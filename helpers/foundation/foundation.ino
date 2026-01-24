@@ -1,20 +1,24 @@
 /*
-  SCORBOT motor controller
-  */
+SCORBOT ER III controller program
+
+Controls a 6-axis SCORBOT robot arm via DC motors with quadrature encoders.
+Provides goal-based joint control (homing, move-to-position) with stall detection,
+differential wrist drive, and a queue system for sequencing multi-joint movements.
+
+setup() initializes hardware, then builds and starts a goal queue defining the motion sequence.
+loop() polls encoders, checks stalls and home switches, executes goals, and advances the queue.
+Edit the queueAddGoal() calls in setup() to change the robot's movement sequence.
+
+This is a not a complete control system, but is a robust start for expanding to more complex projects.
+
+See Readme for next steps in project.
+
+*/
 
 #include <Arduino.h>
 
+// this is the definitions of pins and hardware
 #include "/Users/steveturbek/Documents/scorbot_controller/scorbot_controller/scorbot.h"
-
-/*
-Home is 0
-CW is positive steps
-CCW is negative steps
-for example Base CCW to home: -7338 CW to home:5734
-
-CW closes gripper "Righty-tighty"
-CW for wrist roll is normal human wrist direction
-*/
 
 // Goal-based states
 enum JointGoal {

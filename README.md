@@ -13,7 +13,7 @@ Arduino based motor controller for rescued Scorbot ER III robot arm.
 
 ## Project Goals
 
-This is a messing around, learning project from getting a free robot arm. The Scorbot ER III is a circa 1995 robot. So simple, maybe even I can work with it!
+This is a messing around, learning project inspired by a free robot arm. The Scorbot ER III is a circa 1995 robot. So simple, maybe even I can work with it!
 
 The goals of the project are to
 
@@ -29,22 +29,16 @@ The goals of the project are to
 - If costs go above $200
 - If effort goes beyond a few weeks
 
-## TODO
+## Future Steps
 
-- [] add joystick control
-- [] build
-- [] measure and software hard code end stops
-- [] some kind of clean up position regit before switches so the homing process goes faster
-- [] add move to end/stall and stop (good for picking up item with gripper)
-- [x] add move to position
-- [x] add queue of goals, with parallel and sequential steps
-- [x] add all stop with interrupt
-- [x] make 'home' the CW clockwise side of the microswitch. there are ~200 encoder steps where the switch is depressed as the arm moves across the button.
-- [x] gripper home is stall when closed
-- [x] wrist pitch and roll movements depend on motors 4-5 working together differential drive
-- [x] shoulder find home
-- [x] write arduino code to get arm to move to home position
-- [x] make replacement microswitch cams
+- [] add direct joystick control
+- [] add Microbit remote control for student project
+- [] 3D model top of case
+- [] define and make a demo program, like moving a chess piece from one position to another
+- [] define a way to write, store and load "programs" as external files
+- [] measure end stops/stalls for each motor; update scorbot.h definitions
+- [] Write "clean up" function to position motors near switches so the start up homing process goes faster
+- [] add move to end/stall and stop function (good for picking up item with gripper)
 
 ## Project Log
 
@@ -65,6 +59,16 @@ The goals of the project are to
   - installed CLANG to VSCode to get linting/formatting
   - MOTOR_ELBOW was a big pain, would not go CCW. turned out the CCW pin (arduinio pin 27) was loose
   - added Queue system to make sequence of actions
+
+  - [x] add move to position
+  - [x] add queue of goals, with parallel and sequential steps
+  - [x] add all stop with interrupt
+  - [x] make 'home' the CW clockwise side of the microswitch. there are ~200 encoder steps where the switch is depressed as the arm moves across the button.
+  - [x] gripper home is stall when closed
+  - [x] wrist pitch and roll movements depend on motors 4-5 working together differential drive
+  - [x] shoulder find home
+  - [x] write arduino code to get arm to move to home position
+  - [x] make replacement microswitch cams
 
 - December 2025
   - modeled `scorbot joint cover with microswitch cam.stl`, printed and replaced cams. 1 original cam remains
@@ -179,7 +183,7 @@ Here is the pin numbers (looking at the male scorbot cable connector pins)
 | 16        | 2     | Shoulder    | Motor +              | 24          | 1           | 3           | 3            |                           |
 | 17        | 1     | Base        | Motor +              | 22          | 1           | 1           | 1            |                           |
 | 18        | 5     | Wrist Roll  | Encoder P0           | 42          |             |             |              |                           |
-| 19        | 6     | Gripper     | Encoder P1           | 45          |             |             |              |                           |
+| 19        | 6     | Gripper     | Encoder P1           | 44          |             |             |              |                           |
 | 20        | 4     | Wrist Pitch | Encoder P1           | 41          |             |             |              |                           |
 | 21        | 2     | Shoulder    | Encoder P1           | 37          |             |             |              |                           |
 | 22        | 6     | Gripper     | Microswitch          | -           |             |             |              | manual says not connected |
@@ -194,7 +198,7 @@ Here is the pin numbers (looking at the male scorbot cable connector pins)
 | 31        | 3     | Elbow       | Switch & Encoder GND | GND         |             |             |              |                           |
 | 32        | 2     | Shoulder    | Switch & Encoder GND | GND         |             |             |              |                           |
 | 33        | 1     | Base        | Switch & Encoder GND | GND         |             |             |              |                           |
-| 34        | 6     | Gripper     | Encoder P0           | 44          |             |             |              |                           |
+| 34        | 6     | Gripper     | Encoder P0           | 45          |             |             |              |                           |
 | 35        | 4     | Wrist Pitch | Encoder P0           | 40          |             |             |              |                           |
 | 36        | 3     | Elbow       | Encoder P0           | 38          |             |             |              |                           |
 | 37        | -     | -           | -                    | -           |             |             |              |                           |

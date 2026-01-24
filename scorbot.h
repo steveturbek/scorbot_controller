@@ -25,6 +25,16 @@ Based on DB-50 connector wiring and L298N motor driver configuration.
   // Print motor name for debugging
   Serial.println(SCORBOT_REF[MOTOR_BASE].name);  // Prints "Base"
 
+
+Home is 0
+CW is positive steps
+CCW is negative steps
+for example Base CCW to home: -7338 CW to home:5734
+
+CW closes gripper "Righty-tighty"
+CW for wrist roll is normal human wrist direction
+
+
 */
 
 #ifndef SCORBOT_PINS_H
