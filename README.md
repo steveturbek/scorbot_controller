@@ -10,7 +10,7 @@ Arduino-based motor controller and software for rescued Scorbot ER III robot arm
 <source src="images/scorbot.mp4" type="video/mp4" />
 </video>
 
-[Video of Scorbot start up and simple motion demo](images/scorbot.mp4)
+[Video of Scorbot start up and simple motion demo](https://turbek.com/scorbot_controller/images/scorbot.mp4)
 
 ## Potential Future Steps
 
