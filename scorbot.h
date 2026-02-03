@@ -141,11 +141,11 @@ const Scorbot_joints_reference SCORBOT_REF[ScorbotJointIndex_COUNT] = {
     // L298N Board 2, Motor B (Output 2)
     [MOTOR_WRIST_PITCH] =
         {
-            .CCW_pin = 29,
+            .CCW_pin = 29,  // Swapped to fix direction
             .CW_pin = 28,
             .pwm_pin = 4,
-            .encoder_p0_pin = 40,
-            .encoder_p1_pin = 41,
+            .encoder_p0_pin = 41,
+            .encoder_p1_pin = 40,
             .home_switch_pin = 49,
             .name = "wrist_pitch",
             .motor_min_CCW = 200,  // 0-255

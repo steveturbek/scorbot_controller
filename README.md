@@ -5,6 +5,7 @@
 Arduino-based motor controller and software for rescued Scorbot ER III robot arm.
 
 ![Scorbot controller hardware ](images/Scorbot_controller.jpeg)
+![Scorbot controller hardware Internal](images/Scorbot_controller_internal.jpeg)
 
 <video autoplay muted loop playsinline id="myVideo">
 <source src="images/scorbot.mp4" type="video/mp4" />
@@ -18,7 +19,6 @@ The project is complete as a demostration of reviving the Scorbot, but future ex
 
 - [] add direct joystick control
 - [] add Microbit remote control for student project
-- [] 3D model top of case
 - [] define and make a demo program, like moving a chess piece from one position to another
 - [] define a way to write, store and load "programs" as external files
 - [] measure end stops/stalls for each motor; update scorbot.h definitions
@@ -54,6 +54,7 @@ The project is complete as a demostration of reviving the Scorbot, but future ex
   - [x] shoulder find home
   - [x] write arduino code to get arm to move to home position
   - [x] make replacement microswitch cams
+  - [x] 3D model top of case
 
 - December 2025
   - modeled `scorbot joint cover with microswitch cam.stl`, printed and replaced cams. 1 original cam remains
