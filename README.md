@@ -2,7 +2,7 @@
 
 ## Description
 
-Arduino-based motor controller and software for rescued Scorbot ER III robot arm.
+Arduino-based motor controller and software for rescued Scorbot ER III robot arm. MIT License.
 
 ![Scorbot controller hardware ](images/Scorbot_controller.jpeg)
 ![Scorbot controller hardware Internal](images/Scorbot_controller_internal.jpeg)
@@ -12,6 +12,74 @@ Arduino-based motor controller and software for rescued Scorbot ER III robot arm
 </video>
 
 [Video of Scorbot start up and simple motion demo](https://turbek.com/scorbot_controller/images/scorbot.mp4)
+
+## Current Status
+
+**Project Status: Complete (Hibernating)**
+
+The controller is a demonstration of reviving a Scorbot ER III:
+
+- All 6 axes move with PWM speed control
+- All axes home correctly (gripper uses stall detection, others use microswitches)
+- Position-based movement via encoder feedback
+- Differential wrist control (pitch and roll motors work together)
+- Goal-based queue system for sequencing movements
+- Emergency stop functionality
+- Demo sequence: homes all axes → picks up item → flips it → relocates
+
+## Software Quick Start
+
+1. **Upload firmware**: Load `scorbot_controller.ino` to Arduino Mega using Arduino IDE
+2. **Connect Serial Monitor**: 115,200 baud to see debug output
+3. **Power on**: Robot will home all axes sequentially, then run the demo sequence
+4. **Modify behavior**: Edit the `setup()` function in `scorbot_controller.ino` to change the movement sequence
+
+### Example: Adding a movement to the queue
+
+```cpp
+// Create a new goal group (movements in a group run in parallel)
+queueCreateGoalGroup("move base and shoulder");
+queueAddGoal(MOTOR_BASE, GOAL_MOVE_TO, 1050);      // Move base to position 1050
+queueAddGoal(MOTOR_SHOULDER, GOAL_MOVE_TO, -500);  // Move shoulder to -500
+
+// Wait 1 second before next group
+queueCreateGoalGroupWait(1000);
+
+// Gripper grab (move until stall detected)
+queueCreateGoalGroup("grab item");
+queueAddGoal(MOTOR_GRIPPER, GOAL_MOVE_TILL_STALL, 50);
+```
+
+## Key Code Entry Points
+
+| File                     | Purpose                                                  |
+| ------------------------ | -------------------------------------------------------- |
+| `scorbot_controller.ino` | Main firmware - modify `setup()` to change demo sequence |
+| `scorbot.h`              | Pin definitions, motor structs, speed thresholds         |
+| `helpers/pin_test/`      | Diagnostic utility for verifying wiring                  |
+
+### Key Functions
+
+- `queueCreateGoalGroup(name)` - Start a new parallel movement group
+- `queueAddGoal(motor, goalType, target)` - Add a motor goal to current group
+- `queueCreateGoalGroupWait(ms)` - Add a pause between groups
+- `queueAddGoalsFindHomeAll()` - Home all axes sequentially
+- `queueStart()` - Begin executing the queue
+
+### Goal Types
+
+- `GOAL_FIND_HOME` - Search for home switch with edge detection
+- `GOAL_MOVE_TO` - Move to encoder position
+- `GOAL_MOVE_TILL_STALL` - Move until motor stalls (useful for gripper)
+
+## Known Quirks & Lessons Learned
+
+- **High PWM required**: Motors need high PWM values to overcome static friction. Elbow requires PWM 255; most others need 200+. See `motor_min_CW/CCW` in `scorbot.h`.
+- **Stall detection timing**: Shoulder and Wrist Pitch are sensitive and need longer stall detection (400ms vs 100ms for others)
+- **Gripper has no microswitch**: Uses stall detection when closed for homing
+- **Differential wrist**: Wrist Pitch and Roll motors are mechanically coupled. Pure pitch = both same direction; pure roll = opposite directions. Handled automatically in firmware.
+- **Home base last**: Base swings wildly during homing - the code homes it last for safety
+- **Elbow issues**: Had mechanical problems during development; pin 27 connection was loose
 
 ## Potential Future Steps
 
@@ -38,7 +106,7 @@ The project is complete as a demostration of reviving the Scorbot, but future ex
   - `helpers/pin_test/pin_test.ino` was looking for shorts, etc in the arduino mega pins, due to my clumsy work. surprisingly I got it right on the first try
   - `helpers/motor_only_test/motor_only_test.ino` just moves the motors back and forth
   - `helpers/base_motor_test/base_motor_test.ino` is testing for homing and encoders for just the base motor
-  - [Scorbot ER-4U][https://www.theoldrobots.com/book45/ER4u_User_Manual.pdf] seems to be essentially the same machine
+  - [Scorbot ER-4U](https://www.theoldrobots.com/book45/ER4u_User_Manual.pdf) seems to be essentially the same machine
   - note that Shoulder, Elbow, Wrist Pitch are built in such a way that wrist pitch remains consistent relative as shoulder and elbow move. Moving the shoulder does NOT simply swing the gripper tip relative to the shoulder. Moving the shoulder rotates the elbow to keep the wrist pitch steady. This is cool / confusing. probably needs kinematics
   - Arduino IDE is pretty slow. VS Code extension for arduino has been deprecated. PlatformIO looks too complicated for this project. Arduino Community Edition might work, but CLI, etc are too complicated at this point
   - installed CLANG to VSCode to get linting/formatting
